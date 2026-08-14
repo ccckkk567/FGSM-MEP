@@ -1,0 +1,10 @@
+name: mask_analysis
+analysis:
+  epsilon: 16
+  step_size: 2
+  steps: 10
+  restarts: 1
+  alpha: 100
+  node: A
+  thresholds: [1.0, 0.99, 0.5, 0.1]
+  mask_attacks: [clean, fgsm, pgd50, cw20, aa]

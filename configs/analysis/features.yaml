@@ -1,0 +1,7 @@
+name: feature_analysis
+analysis:
+  epsilon: 16
+  step_size: 2
+  steps: 10
+  restarts: 1
+  alpha: 100

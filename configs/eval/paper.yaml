@@ -1,0 +1,13 @@
+name: paper_evaluation
+eval:
+  epsilon: 16
+  step_size: 2
+  attacks: [clean, fgsm, pgd10, pgd20, pgd50, cw20, apgd-t, aa]
+  restarts: 1
+  noise:
+    enabled: true
+    kind: uniform
+    magnitude: 16
+    seed: 0
+  batch_size: 128
+  autoattack_batch_size: 250

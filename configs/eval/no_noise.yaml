@@ -1,0 +1,11 @@
+name: no_noise_evaluation
+eval:
+  epsilon: 16
+  step_size: 2
+  attacks: [clean, fgsm, pgd10, pgd50, cw20, aa]
+  restarts: 1
+  noise:
+    enabled: false
+    kind: uniform
+    magnitude: 0
+    seed: 0

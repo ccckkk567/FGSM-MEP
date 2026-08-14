@@ -1,0 +1,6 @@
+name: induce_p10_eps8
+train:
+  objective: induce_co
+  backend: mep
+  epsilon: 8
+  induce_percent: 10

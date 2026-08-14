@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "co-blessing"
+version = "0.1.0"
+description = "Reproduction code for arXiv:2402.18211v1 on CIFAR-10 and ResNet18"
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+  "numpy==1.24.4",
+  "PyYAML==6.0.1",
+  "matplotlib==3.7.5",
+  "pandas==2.0.3",
+  "tqdm==4.66.5",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.3.2"]
+
+[tool.setuptools.packages.find]
+include = ["co_blessing*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

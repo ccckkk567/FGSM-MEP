@@ -1,0 +1,6 @@
+name: ours_co_eps12
+train:
+  objective: ours_co
+  backend: mep
+  epsilon: 12
+  track_features: true

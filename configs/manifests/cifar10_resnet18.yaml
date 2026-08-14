@@ -1,0 +1,23 @@
+output_root: runs
+experiments:
+  - config: configs/train/ours_fd_eps10.yaml
+    checkpoint: best.pt
+  - config: configs/train/ours_co_eps10.yaml
+    checkpoint: final.pt
+  - config: configs/train/ours_fd_eps12.yaml
+    checkpoint: best.pt
+  - config: configs/train/ours_co_eps12.yaml
+    checkpoint: final.pt
+  - config: configs/train/ours_fd_eps14.yaml
+    checkpoint: best.pt
+  - config: configs/train/ours_co_eps14.yaml
+    checkpoint: final.pt
+  - config: configs/train/ours_fd_eps16.yaml
+    checkpoint: best.pt
+  - config: configs/train/ours_co_eps16.yaml
+    checkpoint: final.pt
+mechanism_train_configs:
+  - configs/train/induce_p1_eps8.yaml
+  - configs/train/induce_p3_eps8.yaml
+  - configs/train/induce_p10_eps8.yaml
+  - configs/train/induce_p20_eps8.yaml

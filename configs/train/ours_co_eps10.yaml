@@ -1,0 +1,5 @@
+name: ours_co_eps10
+train:
+  objective: ours_co
+  backend: mep
+  epsilon: 10

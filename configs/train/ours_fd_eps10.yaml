@@ -1,0 +1,5 @@
+name: ours_fd_eps10
+train:
+  objective: ours_fd
+  backend: mep
+  epsilon: 10

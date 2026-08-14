@@ -1,0 +1,5 @@
+name: rs_co_eps12
+train:
+  objective: ours_co
+  backend: rs
+  epsilon: 12

@@ -1,0 +1,16 @@
+*.log
+papers/
+related_code/
+docs/
+scripts/
+data/
+runs/
+outputs/
+*.pt
+*.pth
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/

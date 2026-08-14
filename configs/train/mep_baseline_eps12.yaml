@@ -1,0 +1,5 @@
+name: mep_baseline_eps12
+train:
+  objective: mep_baseline
+  backend: mep
+  epsilon: 12
