@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
+import textwrap
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +16,56 @@ from .utils import REPO_ROOT, sha256_tree
 REFERENCE_ROOT = REPO_ROOT / "related_code" / "ConvergeSmooth"
 AUTOATTACK_ROOT = REFERENCE_ROOT / "autoattack"
 EXPECTED_SHA256 = "aeb3b5167a3e4971af0fb0192733cff9b8e5bba79ef5722dd1a1fe576db1afc0"
+
+
+def _zero_gradients_compat(inputs: Any) -> None:
+    """PyTorch's removed ``torch.autograd.gradcheck.zero_gradients`` helper."""
+
+    if isinstance(inputs, torch.Tensor):
+        if inputs.grad is not None:
+            inputs.grad.detach_()
+            inputs.grad.zero_()
+    elif isinstance(inputs, Iterable):
+        for item in inputs:
+            _zero_gradients_compat(item)
+
+
+def _install_torch_compatibility_shims() -> None:
+    # The pinned 2019 AutoAttack FAB implementation imports this private
+    # helper, which was removed from recent PyTorch releases. Injecting its
+    # original behavior keeps the reference source tree immutable and pinned.
+    gradcheck = importlib.import_module("torch.autograd.gradcheck")
+    if not hasattr(gradcheck, "zero_gradients"):
+        gradcheck.zero_gradients = _zero_gradients_compat
+
+
+def _patch_fab_device_compatibility() -> None:
+    """Patch only device placement in the hash-pinned FAB implementation."""
+
+    fab_module = importlib.import_module("autoattack.fab_pt")
+    original = fab_module.FABAttack.projection_linf
+    if getattr(original, "_co_blessing_device_compat", False):
+        return
+    source = textwrap.dedent(inspect.getsource(original))
+    replacements = {
+        "u = torch.arange(0, w.shape[0])":
+            "u = torch.arange(0, w.shape[0], device=w.device)",
+        "lb = torch.zeros(c2.shape[0])":
+            "lb = torch.zeros(c2.shape[0], device=w.device)",
+        "ub = torch.ones(c2.shape[0]) * (w.shape[1] - 1)":
+            "ub = torch.ones(c2.shape[0], device=w.device) * (w.shape[1] - 1)",
+        "counter2 = torch.zeros(lb.shape).long()":
+            "counter2 = torch.zeros(lb.shape, device=w.device).long()",
+    }
+    for old, new in replacements.items():
+        if source.count(old) != 1:
+            raise RuntimeError(f"Unexpected pinned FAB source; missing line: {old}")
+        source = source.replace(old, new)
+    namespace = dict(original.__globals__)
+    exec(compile(source, str(AUTOATTACK_ROOT / "fab_pt.py"), "exec"), namespace)
+    patched = namespace["projection_linf"]
+    patched._co_blessing_device_compat = True
+    fab_module.FABAttack.projection_linf = patched
 
 
 def source_metadata() -> dict[str, Any]:
@@ -39,10 +92,12 @@ def _autoattack_class() -> type:
             "Reference AutoAttack snapshot differs from the version used by the reproduction: "
             f"expected {EXPECTED_SHA256}, got {metadata['sha256']}"
         )
+    _install_torch_compatibility_shims()
     reference = str(REFERENCE_ROOT)
     if reference not in sys.path:
         sys.path.insert(0, reference)
     module = importlib.import_module("autoattack")
+    _patch_fab_device_compatibility()
     module_path = Path(module.__file__).resolve()
     if AUTOATTACK_ROOT.resolve() not in module_path.parents:
         raise RuntimeError(

@@ -6,7 +6,12 @@ torch = pytest.importorskip("torch")
 nn = torch.nn
 
 from co_blessing.attacks import cw_linf, pgd
-from co_blessing.autoattack_adapter import EXPECTED_SHA256, source_metadata
+from co_blessing.autoattack_adapter import (
+    EXPECTED_SHA256,
+    _install_torch_compatibility_shims,
+    _autoattack_class,
+    source_metadata,
+)
 from co_blessing.evaluation import add_inference_noise
 from co_blessing.losses import channel_difference_scores, feature_difference, smooth_cross_entropy
 
@@ -85,3 +90,38 @@ def test_reference_autoattack_snapshot_is_pinned() -> None:
     assert metadata["available"]
     assert metadata["matches_expected"]
     assert metadata["sha256"] == EXPECTED_SHA256
+
+
+def test_old_autoattack_zero_gradients_compatibility() -> None:
+    import importlib
+
+    gradcheck = importlib.import_module("torch.autograd.gradcheck")
+    original = getattr(gradcheck, "zero_gradients", None)
+    if original is not None:
+        delattr(gradcheck, "zero_gradients")
+    try:
+        _install_torch_compatibility_shims()
+        tensor = torch.tensor([2.0], requires_grad=True)
+        tensor.square().sum().backward()
+        assert tensor.grad is not None and tensor.grad.item() == 4.0
+        gradcheck.zero_gradients(tensor)
+        assert tensor.grad is not None and tensor.grad.item() == 0.0
+    finally:
+        if original is None:
+            delattr(gradcheck, "zero_gradients")
+        else:
+            gradcheck.zero_gradients = original
+
+
+def test_old_fab_linf_projection_keeps_helper_tensors_on_device() -> None:
+    _autoattack_class()
+    from autoattack.fab_pt import FABAttack
+
+    attack = FABAttack(lambda value: value, device="cpu")
+    points = torch.tensor([[0.2, 0.7], [0.6, 0.4]])
+    weights = torch.tensor([[1.0, -0.5], [-0.25, 1.0]])
+    bias = torch.tensor([0.1, 0.2])
+    projected = attack.projection_linf(points, weights, bias)
+    assert projected.shape == points.shape
+    assert projected.device == points.device
+    assert torch.isfinite(projected).all()
