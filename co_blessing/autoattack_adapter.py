@@ -12,7 +12,7 @@ from .utils import REPO_ROOT, sha256_tree
 
 REFERENCE_ROOT = REPO_ROOT / "related_code" / "ConvergeSmooth"
 AUTOATTACK_ROOT = REFERENCE_ROOT / "autoattack"
-EXPECTED_SHA256 = "25cd36d8e1b685755c7f988167daa71eb0ee95cbfff1c0add4b036542bfdb189"
+EXPECTED_SHA256 = "aeb3b5167a3e4971af0fb0192733cff9b8e5bba79ef5722dd1a1fe576db1afc0"
 
 
 def source_metadata() -> dict[str, Any]:

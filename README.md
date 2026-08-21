@@ -3,7 +3,7 @@
 这是 arXiv:2402.18211v1 的独立 CIFAR-10 / ResNet18 复现实现。正式主表使用
 FGSM-MEP；FGSM-RS 只作为论文描述歧义的诊断后端。`related_code/` 不会被修改，
 其中 ConvergeSmooth 自带的旧 AutoAttack 快照仅在 APGD-T/AA 评估时只读加载；其
-SHA-256 固定为 `25cd36d8e1b685755c7f988167daa71eb0ee95cbfff1c0add4b036542bfdb189`，
+SHA-256 固定为 `aeb3b5167a3e4971af0fb0192733cff9b8e5bba79ef5722dd1a1fe576db1afc0`，
 与 FGSM-PGI 中的副本一致。快照变化时评估会直接报错，避免悄悄更换攻击版本。
 
 ## 环境

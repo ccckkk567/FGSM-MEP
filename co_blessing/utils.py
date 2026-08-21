@@ -75,7 +75,10 @@ def sha256_tree(root: Path, pattern: str = "*.py") -> str:
     digest = hashlib.sha256()
     for path in sorted(root.rglob(pattern)):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-        digest.update(path.read_bytes())
+        # Git may materialize text files with CRLF on Windows and LF on Linux.
+        # Normalize line endings so a pinned source tree has the same digest on
+        # a workstation and an HPC node.
+        digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 
