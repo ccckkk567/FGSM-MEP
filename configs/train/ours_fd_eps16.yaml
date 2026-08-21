@@ -3,3 +3,4 @@ train:
   objective: ours_fd
   backend: mep
   epsilon: 16
+  fd_include_mep_logit: false

@@ -23,11 +23,26 @@ def fgsm(
     inputs: torch.Tensor,
     targets: torch.Tensor,
     epsilon: float,
+    *,
+    random_start: bool = False,
+    freeze_misclassified: bool = False,
 ) -> torch.Tensor:
-    delta = torch.zeros_like(inputs, requires_grad=True)
+    if random_start:
+        delta = project_linf(
+            torch.empty_like(inputs).uniform_(-epsilon, epsilon), inputs, epsilon
+        )
+    else:
+        delta = torch.zeros_like(inputs)
+    delta.requires_grad_(True)
     logits = model(inputs + delta)
+    active = logits.argmax(1).eq(targets) if freeze_misclassified else None
+    if active is not None and not active.any():
+        return delta.detach()
     gradient = torch.autograd.grad(F.cross_entropy(logits, targets), delta)[0]
-    return project_linf(epsilon * gradient.sign(), inputs, epsilon).detach()
+    updated = project_linf(delta.detach() + epsilon * gradient.sign(), inputs, epsilon)
+    if active is not None:
+        updated = torch.where(active[:, None, None, None], updated, delta.detach())
+    return updated.detach()
 
 
 def pgd(
@@ -40,10 +55,11 @@ def pgd(
     restarts: int = 1,
     *,
     random_start: bool = True,
+    freeze_misclassified: bool = False,
     loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
     return_trace: bool = False,
 ) -> torch.Tensor | AttackTrace:
-    """Full-iteration L-inf PGD without correctness-based early stopping."""
+    """L-inf PGD with optional legacy correctness-based sample freezing."""
 
     if steps <= 0 or restarts <= 0:
         raise ValueError("PGD steps and restarts must be positive")
@@ -60,9 +76,21 @@ def pgd(
         for _ in range(steps):
             delta.requires_grad_(True)
             logits = model(inputs + delta)
+            active = logits.argmax(1).eq(targets) if freeze_misclassified else None
+            if active is not None and not active.any():
+                delta = delta.detach()
+                break
             loss = loss_fn(logits, targets)
             gradient = torch.autograd.grad(loss, delta)[0]
-            delta = project_linf(delta.detach() + step_size * gradient.sign(), inputs, epsilon)
+            updated = project_linf(
+                delta.detach() + step_size * gradient.sign(), inputs, epsilon
+            )
+            if active is not None:
+                delta = torch.where(
+                    active[:, None, None, None], updated, delta.detach()
+                )
+            else:
+                delta = updated
             steps_run += 1
         with torch.no_grad():
             logits = model(inputs + delta)
@@ -92,6 +120,7 @@ def cw_linf(
     steps: int = 20,
     restarts: int = 1,
     *,
+    freeze_misclassified: bool = False,
     return_trace: bool = False,
 ) -> torch.Tensor | AttackTrace:
     return pgd(
@@ -103,6 +132,7 @@ def cw_linf(
         steps,
         restarts,
         random_start=True,
+        freeze_misclassified=freeze_misclassified,
         loss_fn=cw_margin,
         return_trace=return_trace,
     )

@@ -48,7 +48,10 @@ def add_inference_noise(
         noise = torch.empty_like(inputs).normal_(0.0, magnitude, generator=generator)
     else:
         raise ValueError(f"Unsupported inference noise: {kind}")
-    return (inputs + noise).clamp(0.0, 1.0)
+    noisy = inputs + noise
+    if bool(noise_config.get("clip_to_input_range", True)):
+        noisy = noisy.clamp(0.0, 1.0)
+    return noisy
 
 
 def _attack_seed(base_seed: int, name: str) -> int:
@@ -112,6 +115,8 @@ def generate_examples(
     step_size: float,
     restarts: int,
     batch_size: int,
+    freeze_misclassified: bool,
+    fgsm_random_start: bool,
 ) -> torch.Tensor:
     kind, steps = parse_attack(attack_name)
     if kind == "clean":
@@ -126,7 +131,14 @@ def generate_examples(
         batch_images = batch_images.to(device)
         batch_targets = batch_targets.to(device)
         if kind == "fgsm":
-            delta = fgsm(model, batch_images, batch_targets, epsilon)
+            delta = fgsm(
+                model,
+                batch_images,
+                batch_targets,
+                epsilon,
+                random_start=fgsm_random_start,
+                freeze_misclassified=freeze_misclassified,
+            )
         elif kind == "pgd":
             assert steps is not None
             delta = pgd(
@@ -138,6 +150,7 @@ def generate_examples(
                 steps,
                 restarts,
                 random_start=True,
+                freeze_misclassified=freeze_misclassified,
             )
         elif kind == "cw":
             assert steps is not None
@@ -149,6 +162,7 @@ def generate_examples(
                 step_size,
                 steps,
                 restarts,
+                freeze_misclassified=freeze_misclassified,
             )
         else:
             raise ValueError(f"Use the AutoAttack adapter for {kind}")
@@ -202,6 +216,8 @@ def evaluate(config: dict[str, Any], checkpoint_path: str | Path) -> Path:
                 step_size=step_size,
                 restarts=int(eval_cfg["restarts"]),
                 batch_size=batch_size,
+                freeze_misclassified=bool(eval_cfg["freeze_misclassified"]),
+                fgsm_random_start=bool(eval_cfg["fgsm_random_start"]),
             )
         metrics[str(attack_name)] = accuracy_on_examples(
             model,

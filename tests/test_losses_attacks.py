@@ -5,7 +5,7 @@ import pytest
 torch = pytest.importorskip("torch")
 nn = torch.nn
 
-from co_blessing.attacks import cw_linf, pgd
+from co_blessing.attacks import cw_linf, fgsm, pgd
 from co_blessing.autoattack_adapter import (
     EXPECTED_SHA256,
     _install_torch_compatibility_shims,
@@ -73,6 +73,39 @@ def test_pgd_and_cw_are_bounded_and_run_all_steps() -> None:
     assert cw_trace.delta.abs().max() <= epsilon + 1e-7
 
 
+def test_reference_attacks_freeze_already_misclassified_examples() -> None:
+    class AlwaysClassZero(nn.Module):
+        def forward(self, inputs):
+            anchor = inputs.flatten(1).sum(1) * 0.0
+            return torch.stack((anchor + 1.0, anchor), dim=1)
+
+    model = AlwaysClassZero()
+    inputs = torch.full((3, 3, 4, 4), 0.5)
+    targets = torch.ones(3, dtype=torch.long)
+    epsilon = 8 / 255
+    trace = pgd(
+        model,
+        inputs,
+        targets,
+        epsilon,
+        2 / 255,
+        steps=4,
+        freeze_misclassified=True,
+        return_trace=True,
+    )
+    assert trace.steps_run == 0
+    assert trace.delta.abs().max() <= epsilon + 1e-7
+    delta = fgsm(
+        model,
+        inputs,
+        targets,
+        epsilon,
+        random_start=True,
+        freeze_misclassified=True,
+    )
+    assert delta.abs().max() <= epsilon + 1e-7
+
+
 def test_inference_noise_is_seeded_and_applied_to_existing_examples() -> None:
     examples = torch.full((2, 3, 4, 4), 0.5)
     config = {"enabled": True, "kind": "uniform", "magnitude": 16, "seed": 0}
@@ -83,6 +116,19 @@ def test_inference_noise_is_seeded_and_applied_to_existing_examples() -> None:
     assert torch.equal(first, second)
     assert not torch.equal(first, examples)
     assert first.min() >= 0 and first.max() <= 1
+
+
+def test_inference_noise_can_preserve_out_of_range_values() -> None:
+    examples = torch.cat((torch.zeros(256), torch.ones(256))).view(1, 1, 16, 32)
+    config = {
+        "enabled": True,
+        "kind": "uniform",
+        "magnitude": 255,
+        "seed": 0,
+        "clip_to_input_range": False,
+    }
+    noisy = add_inference_noise(examples, config, torch.Generator().manual_seed(4))
+    assert noisy.min() < 0 or noisy.max() > 1
 
 
 def test_reference_autoattack_snapshot_is_pinned() -> None:

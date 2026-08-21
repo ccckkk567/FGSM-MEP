@@ -1,0 +1,16 @@
+name: diagnostic_iterative_no_clip
+eval:
+  epsilon: 16
+  step_size: 2
+  attacks: [clean, fgsm, pgd10, pgd20, pgd50, cw20]
+  restarts: 1
+  freeze_misclassified: true
+  fgsm_random_start: true
+  noise:
+    enabled: true
+    kind: uniform
+    magnitude: 16
+    seed: 0
+    # The paper writes x + delta_R but does not state that this sum is clipped.
+    clip_to_input_range: false
+  batch_size: 128

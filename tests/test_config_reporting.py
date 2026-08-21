@@ -20,6 +20,28 @@ def test_all_training_configs_validate() -> None:
         assert config["train"]["epochs"] == 110
 
 
+def test_paper_evaluation_runs_complete_attacks() -> None:
+    config = load_config(ROOT / "configs" / "eval" / "paper.yaml")
+    assert config["eval"]["freeze_misclassified"] is False
+    assert config["eval"]["fgsm_random_start"] is False
+    assert config["eval"]["noise"]["clip_to_input_range"] is True
+
+
+def test_iterative_diagnostic_uses_legacy_reference_attack_semantics() -> None:
+    config = load_config(ROOT / "configs" / "eval" / "diagnostic_iterative.yaml")
+    assert config["eval"]["freeze_misclassified"] is True
+    assert config["eval"]["fgsm_random_start"] is True
+
+
+def test_fd_logit_regularizer_is_only_enabled_in_diagnostic_config() -> None:
+    paper_fd = load_config(ROOT / "configs" / "train" / "ours_fd_eps12.yaml")
+    diagnostic = load_config(
+        ROOT / "configs" / "train" / "diagnostic_fd_plus_mep_eps12.yaml"
+    )
+    assert paper_fd["train"]["fd_include_mep_logit"] is False
+    assert diagnostic["train"]["fd_include_mep_logit"] is True
+
+
 def test_manifest_paths_exist() -> None:
     manifest = yaml.safe_load(
         (ROOT / "configs" / "manifests" / "cifar10_resnet18.yaml").read_text(encoding="utf-8")

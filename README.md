@@ -46,6 +46,8 @@ python -m co_blessing train \
 必要的 MEP 基线和 RS 诊断配置分别是 `mep_baseline_eps12.yaml`、
 `mep_baseline_eps16.yaml`、
 `rs_fd_eps12.yaml`、`rs_co_eps12.yaml`。
+`diagnostic_fd_plus_mep_eps12.yaml` 用来检验论文的 FD 项是否是在 MEP 的 logit
+正则之上叠加；它是诊断实验，不属于主 manifest。
 
 ## 论文评估协议
 
@@ -60,8 +62,14 @@ python -m co_blessing evaluate \
 
 该命令依次执行 Clean、FGSM、PGD-10/20/50、C&W-20、APGD-T、AA。攻击针对
 无噪声确定性模型生成，之后才加入一次 `U(-16/255,16/255)` 并裁剪至 `[0,1]`。
-这严格对应论文的 non-adaptive protocol；第一版没有 EOT。若要确认模型是否发生
-CO，使用 `configs/eval/no_noise.yaml`。
+PGD/C&W 执行完整迭代，不按当前分类结果提前停止；FGSM 从零扰动开始。该协议没有
+EOT。若要确认模型是否发生 CO，使用 `configs/eval/no_noise.yaml`。
+
+首次定位复现偏差时可先运行 `configs/eval/diagnostic_iterative.yaml`，它跳过耗时的
+APGD-T/AA，只计算 Clean、FGSM、PGD 和 C&W，并复刻 FGSM-PGI/ConvergeSmooth 的
+旧评估语义：FGSM 随机起点，样本一旦被误分类就冻结扰动。论文没有说明加入随机
+噪声后是否裁剪回 `[0,1]`；`diagnostic_iterative_no_clip.yaml` 保留越界值，用来与
+裁剪版本做一次受控对照，正式 `paper.yaml` 仍按原复现计划执行裁剪。
 
 比较一组评估结果与论文 Table 2：
 

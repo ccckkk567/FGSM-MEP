@@ -266,7 +266,14 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
         checkpoint = torch.load(resume, map_location="cpu")
         saved_config = checkpoint.get("config", {})
         saved_train = saved_config.get("train", {})
-        for key in ("objective", "backend", "epsilon", "alpha", "feature_node"):
+        for key in (
+            "objective",
+            "backend",
+            "epsilon",
+            "alpha",
+            "feature_node",
+            "fd_include_mep_logit",
+        ):
             if key in saved_train and saved_train[key] != train_cfg[key]:
                 raise ValueError(
                     f"Resume config mismatch for train.{key}: "
@@ -349,6 +356,10 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
                 loss = adversarial_ce + float(train_cfg["feature_weight"]) * feature_difference(
                     features_adv[feature_node], features_initial[feature_node]
                 )
+                if bool(train_cfg["fd_include_mep_logit"]):
+                    loss = loss + float(train_cfg["mep_logit_weight"]) * F.mse_loss(
+                        logits_adv, logits_initial
+                    )
             elif objective == "induce_co":
                 if selected_channels.numel() == 0:
                     loss = adversarial_ce

@@ -1,0 +1,15 @@
+name: diagnostic_iterative
+eval:
+  epsilon: 16
+  step_size: 2
+  attacks: [clean, fgsm, pgd10, pgd20, pgd50, cw20]
+  restarts: 1
+  freeze_misclassified: true
+  fgsm_random_start: true
+  noise:
+    enabled: true
+    kind: uniform
+    magnitude: 16
+    seed: 0
+    clip_to_input_range: true
+  batch_size: 128

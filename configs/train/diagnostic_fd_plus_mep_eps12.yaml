@@ -1,7 +1,7 @@
-name: ours_fd_eps12
+name: diagnostic_fd_plus_mep_eps12
 train:
   objective: ours_fd
   backend: mep
   epsilon: 12
-  fd_include_mep_logit: false
+  fd_include_mep_logit: true
   track_features: true
