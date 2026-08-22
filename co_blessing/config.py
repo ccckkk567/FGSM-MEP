@@ -37,7 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "mep_reset_epochs": 40,
         "mep_momentum_decay": 0.3,
         "mep_logit_weight": 10.0,
-        "fd_include_mep_logit": False,
+        "fd_include_mep_logit": True,
         "feature_node": "B",
         "feature_weight": 200.0,
         "induce_percent": 10.0,

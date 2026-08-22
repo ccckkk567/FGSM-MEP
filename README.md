@@ -31,6 +31,10 @@ python -m co_blessing train \
   --device cuda:0
 ```
 
+正式 Ours-FD 在 FGSM-MEP 损失上加入节点 B 的特征差异约束，训练目标为
+`smooth CE + 10 × logit MSE + 200 × feature MSE(B)`。该组合在 CIFAR-10、
+ε=12/255 上复现了论文 Table 3；所有 `ours_fd_eps*.yaml` 均已启用这一目标。
+
 Ours-CO 使用相应的 `ours_co_eps*.yaml`。FD 的论文表格 checkpoint 是 `best.pt`；
 CO 使用 `final.pt`。`resume.pt` 保存优化器、调度器、随机数和完整 MEP 状态：
 
@@ -46,8 +50,8 @@ python -m co_blessing train \
 必要的 MEP 基线和 RS 诊断配置分别是 `mep_baseline_eps12.yaml`、
 `mep_baseline_eps16.yaml`、
 `rs_fd_eps12.yaml`、`rs_co_eps12.yaml`。
-`diagnostic_fd_plus_mep_eps12.yaml` 用来检验论文的 FD 项是否是在 MEP 的 logit
-正则之上叠加；它是诊断实验，不属于主 manifest。
+`diagnostic_fd_plus_mep_eps12.yaml` 是此前验证该损失组合时使用的历史诊断别名；
+现在与正式 `ours_fd_eps12.yaml` 的训练目标一致，不属于主 manifest。
 
 ## 论文评估协议
 

@@ -33,13 +33,18 @@ def test_iterative_diagnostic_uses_legacy_reference_attack_semantics() -> None:
     assert config["eval"]["fgsm_random_start"] is True
 
 
-def test_fd_logit_regularizer_is_only_enabled_in_diagnostic_config() -> None:
+def test_mep_fd_configs_include_the_validated_logit_regularizer() -> None:
     paper_fd = load_config(ROOT / "configs" / "train" / "ours_fd_eps12.yaml")
     diagnostic = load_config(
         ROOT / "configs" / "train" / "diagnostic_fd_plus_mep_eps12.yaml"
     )
-    assert paper_fd["train"]["fd_include_mep_logit"] is False
+    assert paper_fd["train"]["fd_include_mep_logit"] is True
     assert diagnostic["train"]["fd_include_mep_logit"] is True
+
+    for epsilon in (10, 12, 14, 16):
+        config = load_config(ROOT / "configs" / "train" / f"ours_fd_eps{epsilon}.yaml")
+        assert config["train"]["backend"] == "mep"
+        assert config["train"]["fd_include_mep_logit"] is True
 
 
 def test_manifest_paths_exist() -> None:
