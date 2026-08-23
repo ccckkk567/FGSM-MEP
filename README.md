@@ -141,6 +141,43 @@ python -m co_blessing reproduce \
 AutoAttack 还会增加明显耗时。实际结果会受 PyTorch/cuDNN 和 GPU 算法选择影响，
 所有版本、seed、配置与 checkpoint epoch 都会写入运行目录。
 
+## CIFAR-10 Ours-FD epsilon sweep
+
+`cifar10_fd_sweep.yaml` 固定已验证的 Ours-FD 目标，只扫描训练/评估半径
+`8/12/16/32/48/64`。每组用对应半径、无推理噪声评估，并使用训练期间 PGD-10
+准确率最高的 `best.pt`。评估包含 Clean、FGSM、PGD-10/50、C&W-20 和完整
+AutoAttack；PGD/C&W 步长保持论文协议的 `2/255`。
+
+两张 GPU 可分别运行互不重叠的分片；两个进程必须使用同一个全新输出目录：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m co_blessing reproduce \
+  --manifest configs/manifests/cifar10_fd_sweep_gpu0.yaml \
+  --data-root /path/to/cifar-data \
+  --output-root /path/to/cifar10-fd-sweep \
+  --device cuda:0
+
+CUDA_VISIBLE_DEVICES=1 python -m co_blessing reproduce \
+  --manifest configs/manifests/cifar10_fd_sweep_gpu1.yaml \
+  --data-root /path/to/cifar-data \
+  --output-root /path/to/cifar10-fd-sweep \
+  --device cuda:0
+```
+
+分片完成后运行完整 manifest。已有 checkpoint 和评估会被跳过，此命令只汇总六组
+结果到 `cifar10_fd_sweep_report/sweep_summary.{csv,md}`：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m co_blessing reproduce \
+  --manifest configs/manifests/cifar10_fd_sweep.yaml \
+  --data-root /path/to/cifar-data \
+  --output-root /path/to/cifar10-fd-sweep \
+  --device cuda:0
+```
+
+若任务中断，原命令会从各运行目录的 `resume.pt` 自动恢复。不要复用此前采用旧损失
+定义的运行目录，否则存在同名 `final.pt` 时会被当成已完成实验跳过。
+
 ## 测试
 
 ```bash

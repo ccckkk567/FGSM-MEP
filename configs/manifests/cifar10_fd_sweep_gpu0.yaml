@@ -1,0 +1,13 @@
+output_root: runs/cifar10_fd_sweep
+report_mode: summary
+report_name: cifar10_fd_sweep_gpu0_report
+experiments:
+  - config: configs/train/ours_fd_eps8.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps8.yaml
+  - config: configs/train/ours_fd_eps16.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps16.yaml
+  - config: configs/train/ours_fd_eps48.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps48.yaml

@@ -1,0 +1,22 @@
+output_root: runs/cifar10_fd_sweep
+report_mode: summary
+report_name: cifar10_fd_sweep_report
+experiments:
+  - config: configs/train/ours_fd_eps8.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps8.yaml
+  - config: configs/train/ours_fd_eps12.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps12.yaml
+  - config: configs/train/ours_fd_eps16.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps16.yaml
+  - config: configs/train/ours_fd_eps32.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps32.yaml
+  - config: configs/train/ours_fd_eps48.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps48.yaml
+  - config: configs/train/ours_fd_eps64.yaml
+    checkpoint: best.pt
+    eval_config: configs/eval/no_noise_eps64.yaml

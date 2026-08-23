@@ -1,0 +1,16 @@
+name: no_noise_eps8
+eval:
+  epsilon: 8
+  step_size: 2
+  attacks: [clean, fgsm, pgd10, pgd50, cw20, aa]
+  restarts: 1
+  freeze_misclassified: false
+  fgsm_random_start: false
+  noise:
+    enabled: false
+    kind: uniform
+    magnitude: 0
+    seed: 0
+    clip_to_input_range: true
+  batch_size: 128
+  autoattack_batch_size: 250

@@ -7,7 +7,7 @@ import yaml
 
 from co_blessing.config import load_config
 from co_blessing.paper_values import PAPER_TABLE2
-from co_blessing.reporting import compare_results
+from co_blessing.reporting import compare_results, summarize_results
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,7 +41,7 @@ def test_mep_fd_configs_include_the_validated_logit_regularizer() -> None:
     assert paper_fd["train"]["fd_include_mep_logit"] is True
     assert diagnostic["train"]["fd_include_mep_logit"] is True
 
-    for epsilon in (10, 12, 14, 16):
+    for epsilon in (8, 10, 12, 14, 16, 32, 48, 64):
         config = load_config(ROOT / "configs" / "train" / f"ours_fd_eps{epsilon}.yaml")
         assert config["train"]["backend"] == "mep"
         assert config["train"]["fd_include_mep_logit"] is True
@@ -55,6 +55,32 @@ def test_manifest_paths_exist() -> None:
     paths += manifest["mechanism_train_configs"]
     assert len(manifest["experiments"]) == 8
     assert all((ROOT / path).exists() for path in paths)
+
+
+def test_cifar10_fd_sweep_manifests_are_complete_and_disjoint() -> None:
+    manifest_dir = ROOT / "configs" / "manifests"
+    full = yaml.safe_load(
+        (manifest_dir / "cifar10_fd_sweep.yaml").read_text(encoding="utf-8")
+    )
+    gpu0 = yaml.safe_load(
+        (manifest_dir / "cifar10_fd_sweep_gpu0.yaml").read_text(encoding="utf-8")
+    )
+    gpu1 = yaml.safe_load(
+        (manifest_dir / "cifar10_fd_sweep_gpu1.yaml").read_text(encoding="utf-8")
+    )
+
+    def epsilon_set(manifest: dict) -> set[int]:
+        values = set()
+        for experiment in manifest["experiments"]:
+            assert (ROOT / experiment["config"]).exists()
+            assert (ROOT / experiment["eval_config"]).exists()
+            values.add(int(load_config(ROOT / experiment["config"])["train"]["epsilon"]))
+        return values
+
+    assert full["report_mode"] == "summary"
+    assert epsilon_set(full) == {8, 12, 16, 32, 48, 64}
+    assert epsilon_set(gpu0).isdisjoint(epsilon_set(gpu1))
+    assert epsilon_set(gpu0) | epsilon_set(gpu1) == epsilon_set(full)
 
 
 def test_paper_comparison_has_zero_delta_for_exact_values(tmp_path: Path) -> None:
@@ -72,3 +98,28 @@ def test_paper_comparison_has_zero_delta_for_exact_values(tmp_path: Path) -> Non
     csv_path, markdown_path = compare_results([result], tmp_path / "report")
     assert csv_path.exists() and markdown_path.exists()
     assert ",0.0\n" in csv_path.read_text(encoding="utf-8")
+
+
+def test_sweep_summary_accepts_epsilon_without_paper_target(tmp_path: Path) -> None:
+    result = tmp_path / "evaluation.json"
+    result.write_text(
+        json.dumps(
+            {
+                "checkpoint_epoch": 42,
+                "training_config": {
+                    "data": {"dataset": "cifar10"},
+                    "model": {"name": "resnet18"},
+                    "seed": 0,
+                    "train": {"objective": "ours_fd", "epsilon": 64},
+                },
+                "evaluation_config": {"epsilon": 64, "noise": {"enabled": False}},
+                "metrics": {"clean": 0.75, "pgd50": 0.25},
+            }
+        ),
+        encoding="utf-8",
+    )
+    csv_path, markdown_path = summarize_results([result], tmp_path / "sweep")
+    assert "ours_fd,0,64.0,64.0,42,pgd50,25.0" in csv_path.read_text(encoding="utf-8")
+    assert "ours_fd | 0 | 64/255 | 64/255 | 42 | 75.00 | 25.00" in markdown_path.read_text(
+        encoding="utf-8"
+    )

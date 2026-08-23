@@ -1,0 +1,6 @@
+name: ours_fd_eps64
+train:
+  objective: ours_fd
+  backend: mep
+  epsilon: 64
+  fd_include_mep_logit: true
