@@ -1,0 +1,13 @@
+name: pilot_fd_eps32_alpha16_fw25
+deterministic: true
+train:
+  objective: ours_fd
+  backend: mep
+  epochs: 40
+  epsilon: 32
+  alpha: 16
+  feature_weight: 25
+  fd_include_mep_logit: true
+  monitor_pgd_steps: 10
+  monitor_pgd_step_size: 8
+  track_features: true

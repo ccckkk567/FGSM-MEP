@@ -46,6 +46,7 @@ TRAIN_FIELDS = [
     "vact_E",
     "selected_channels",
 ]
+LOSS_FIELDS = ["epoch", "train_ce_loss", "train_logit_mse", "train_feature_mse"]
 
 
 def _forward_features(
@@ -79,6 +80,7 @@ def pgd_accuracy(
     device: torch.device,
     *,
     epsilon: float,
+    step_size: float,
     steps: int,
     subset: int | None = None,
 ) -> float:
@@ -98,7 +100,7 @@ def pgd_accuracy(
             images,
             targets,
             epsilon=epsilon,
-            step_size=2.0 / 255.0,
+            step_size=step_size,
             steps=steps,
             restarts=1,
             random_start=True,
@@ -116,6 +118,7 @@ def pgd_monitor(
     device: torch.device,
     *,
     epsilon: float,
+    step_size: float,
     steps: int,
     subset: int | None,
     track_features: bool,
@@ -137,7 +140,7 @@ def pgd_monitor(
             images,
             targets,
             epsilon=epsilon,
-            step_size=2.0 / 255.0,
+            step_size=step_size,
             steps=steps,
             restarts=1,
             random_start=True,
@@ -232,6 +235,7 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
     train_cfg = config["train"]
     epsilon = float(train_cfg["epsilon"]) / 255.0
     alpha = float(train_cfg["alpha"] if train_cfg["alpha"] is not None else train_cfg["epsilon"]) / 255.0
+    monitor_pgd_step_size = float(train_cfg["monitor_pgd_step_size"]) / 255.0
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=float(train_cfg["lr"]),
@@ -271,8 +275,14 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             "backend",
             "epsilon",
             "alpha",
+            "label_true_probability",
+            "mep_momentum_decay",
+            "mep_logit_weight",
             "feature_node",
+            "feature_weight",
             "fd_include_mep_logit",
+            "monitor_pgd_steps",
+            "monitor_pgd_step_size",
         ):
             if key in saved_train and saved_train[key] != train_cfg[key]:
                 raise ValueError(
@@ -302,6 +312,9 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
         model.train()
         started = time.time()
         total_loss = 0.0
+        total_ce_loss = 0.0
+        total_logit_mse = 0.0
+        total_feature_mse = 0.0
         total_correct = 0
         total_seen = 0
         epoch_scores: torch.Tensor | None = None
@@ -345,21 +358,22 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             adversarial_ce = smooth_cross_entropy(
                 logits_adv, targets, float(train_cfg["label_true_probability"])
             )
+            logit_mse = adversarial_ce.new_zeros(())
+            feature_mse = adversarial_ce.new_zeros(())
 
             if objective == "mep_baseline":
-                loss = adversarial_ce + float(train_cfg["mep_logit_weight"]) * F.mse_loss(
-                    logits_adv, logits_initial
-                )
+                logit_mse = F.mse_loss(logits_adv, logits_initial)
+                loss = adversarial_ce + float(train_cfg["mep_logit_weight"]) * logit_mse
             elif objective == "ours_co":
                 loss = adversarial_ce
             elif objective == "ours_fd":
-                loss = adversarial_ce + float(train_cfg["feature_weight"]) * feature_difference(
+                feature_mse = feature_difference(
                     features_adv[feature_node], features_initial[feature_node]
                 )
+                loss = adversarial_ce + float(train_cfg["feature_weight"]) * feature_mse
                 if bool(train_cfg["fd_include_mep_logit"]):
-                    loss = loss + float(train_cfg["mep_logit_weight"]) * F.mse_loss(
-                        logits_adv, logits_initial
-                    )
+                    logit_mse = F.mse_loss(logits_adv, logits_initial)
+                    loss = loss + float(train_cfg["mep_logit_weight"]) * logit_mse
             elif objective == "induce_co":
                 if selected_channels.numel() == 0:
                     loss = adversarial_ce
@@ -371,7 +385,7 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
                     masked_ce = smooth_cross_entropy(
                         masked_logits, targets, float(train_cfg["label_true_probability"])
                     )
-                    selected_difference = feature_difference(
+                    feature_mse = feature_difference(
                         features_adv[feature_node],
                         features_initial[feature_node],
                         selected_channels,
@@ -379,7 +393,7 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
                     loss = (
                         adversarial_ce
                         + masked_ce
-                        - float(train_cfg["feature_weight"]) * selected_difference
+                        - float(train_cfg["feature_weight"]) * feature_mse
                     )
                 assert clean_features_for_selection is not None
                 batch_scores = channel_difference_scores(
@@ -400,6 +414,9 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
                 mep_state.update(sample_ids, perturbation.next_prior, perturbation.next_momentum)
 
             total_loss += loss.item() * targets.numel()
+            total_ce_loss += adversarial_ce.item() * targets.numel()
+            total_logit_mse += logit_mse.item() * targets.numel()
+            total_feature_mse += feature_mse.item() * targets.numel()
             total_correct += logits_adv.argmax(1).eq(targets).sum().item()
             total_seen += targets.numel()
             progress.set_postfix(loss=f"{total_loss / total_seen:.4f}")
@@ -415,6 +432,7 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             loaders.test,
             device,
             epsilon=epsilon,
+            step_size=monitor_pgd_step_size,
             steps=int(train_cfg["monitor_pgd_steps"]),
             subset=train_cfg.get("monitor_subset"),
             track_features=bool(train_cfg.get("track_features", False)),
@@ -423,6 +441,9 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             "clean_accuracy": monitor_clean,
             "pgd10_accuracy": monitor_pgd,
             "train_loss": total_loss / max(total_seen, 1),
+            "train_ce_loss": total_ce_loss / max(total_seen, 1),
+            "train_logit_mse": total_logit_mse / max(total_seen, 1),
+            "train_feature_mse": total_feature_mse / max(total_seen, 1),
             "train_accuracy": total_correct / max(total_seen, 1),
         }
         row = {
@@ -441,6 +462,16 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             "selected_channels": " ".join(map(str, selected_channels.detach().cpu().tolist())),
         }
         append_csv(run_dir / "epochs.csv", row, TRAIN_FIELDS)
+        append_csv(
+            run_dir / "loss_components.csv",
+            {
+                "epoch": epoch,
+                "train_ce_loss": metrics["train_ce_loss"],
+                "train_logit_mse": metrics["train_logit_mse"],
+                "train_feature_mse": metrics["train_feature_mse"],
+            },
+            LOSS_FIELDS,
+        )
 
         if monitor_pgd >= best_pgd:
             best_pgd = monitor_pgd
@@ -470,6 +501,7 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             loaders.test,
             device,
             epsilon=epsilon,
+            step_size=monitor_pgd_step_size,
             steps=int(train_cfg["monitor_pgd_steps"]),
             subset=train_cfg.get("monitor_subset"),
         ),

@@ -1,0 +1,12 @@
+name: pilot_mep_baseline_eps32_alpha16
+deterministic: true
+train:
+  objective: mep_baseline
+  backend: mep
+  epochs: 40
+  epsilon: 32
+  alpha: 16
+  feature_weight: 0
+  monitor_pgd_steps: 10
+  monitor_pgd_step_size: 8
+  track_features: true

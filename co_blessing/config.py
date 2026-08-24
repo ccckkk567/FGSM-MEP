@@ -43,6 +43,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "induce_percent": 10.0,
         "resume_every": 1,
         "monitor_pgd_steps": 10,
+        "monitor_pgd_step_size": 2.0,
         "monitor_subset": None,
         "track_features": False,
     },
@@ -116,6 +117,8 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("Epoch count must be positive")
     if int(train["mep_reset_epochs"]) <= 0:
         raise ValueError("MEP reset period must be positive")
+    if float(train["monitor_pgd_step_size"]) <= 0:
+        raise ValueError("Monitor PGD step size must be positive")
     if train["objective"] == "induce_co":
         percent = float(train["induce_percent"])
         if not 0 < percent <= 100:

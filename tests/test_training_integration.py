@@ -65,6 +65,10 @@ def test_two_epoch_training_and_resume(monkeypatch, tmp_path: Path) -> None:
     assert (run / "best.pt").exists()
     assert (run / "final.pt").exists()
     assert (run / "resume.pt").exists()
+    header = (run / "loss_components.csv").read_text(encoding="utf-8").splitlines()[0]
+    assert "train_ce_loss" in header
+    assert "train_logit_mse" in header
+    assert "train_feature_mse" in header
 
     resumed = copy.deepcopy(config)
     resumed["train"]["epochs"] = 2

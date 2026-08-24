@@ -17,7 +17,7 @@ def test_all_training_configs_validate() -> None:
     for path in sorted((ROOT / "configs" / "train").glob("*.yaml")):
         config = load_config(path)
         assert config["data"]["batch_size"] == 128
-        assert config["train"]["epochs"] == 110
+        assert config["train"]["epochs"] > 0
 
 
 def test_paper_evaluation_runs_complete_attacks() -> None:
@@ -81,6 +81,26 @@ def test_cifar10_fd_sweep_manifests_are_complete_and_disjoint() -> None:
     assert epsilon_set(full) == {8, 12, 16, 32, 48, 64}
     assert epsilon_set(gpu0).isdisjoint(epsilon_set(gpu1))
     assert epsilon_set(gpu0) | epsilon_set(gpu1) == epsilon_set(full)
+
+
+def test_eps32_pilot_grid() -> None:
+    expected = {
+        "pilot_fd_eps32_alpha32_fw25.yaml": ("ours_fd", 32.0, 25.0),
+        "pilot_fd_eps32_alpha16_fw25.yaml": ("ours_fd", 16.0, 25.0),
+        "pilot_fd_eps32_alpha16_fw10.yaml": ("ours_fd", 16.0, 10.0),
+        "pilot_mep_baseline_eps32_alpha16.yaml": ("mep_baseline", 16.0, 0.0),
+    }
+    for name, (objective, alpha, feature_weight) in expected.items():
+        config = load_config(ROOT / "configs" / "train" / name)
+        train = config["train"]
+        assert config["deterministic"] is True
+        assert train["backend"] == "mep"
+        assert train["objective"] == objective
+        assert train["epochs"] == 40
+        assert train["epsilon"] == 32
+        assert train["alpha"] == alpha
+        assert train["feature_weight"] == feature_weight
+        assert train["monitor_pgd_step_size"] == 8
 
 
 def test_paper_comparison_has_zero_delta_for_exact_values(tmp_path: Path) -> None:

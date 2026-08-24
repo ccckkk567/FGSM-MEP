@@ -178,6 +178,26 @@ CUDA_VISIBLE_DEVICES=0 python -m co_blessing reproduce \
 若任务中断，原命令会从各运行目录的 `resume.pt` 自动恢复。不要复用此前采用旧损失
 定义的运行目录，否则存在同名 `final.pt` 时会被当成已完成实验跳过。
 
+### ε=32 stability pilots
+
+当固定 `feature_weight=200` 的大 ε 训练发生坍塌时，使用四张卡并行运行 40-epoch
+筛选。四组分别是 `(alpha, feature_weight)=(32,25),(16,25),(16,10)`，以及
+`alpha=16` 的纯 MEP 对照；checkpoint 监控使用 ε=32、步长 8/255 的 PGD-10，
+所有 pilot 开启确定性算法，且不执行正式攻击评估：
+
+```bash
+./run_cifar10_eps32_pilots.sh \
+  /path/to/cifar-data \
+  /path/to/cifar10-fd-pilots
+
+python summarize_cifar10_eps32_pilots.py /path/to/cifar10-fd-pilots
+```
+
+启动器固定使用物理 GPU 0/1/2/3，在当前终端等待所有进程结束，不创建 tmux
+session。已有 `final.pt` 会跳过，只有 `resume.pt` 时自动续训。训练日志写到输出目录
+的 `logs/`，逐 epoch 的未加权 CE、logit MSE 和 feature MSE 写入
+`loss_components.csv`。
+
 ## 测试
 
 ```bash
