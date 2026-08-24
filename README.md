@@ -193,10 +193,10 @@ CUDA_VISIBLE_DEVICES=0 python -m co_blessing reproduce \
 python summarize_cifar10_eps32_pilots.py /path/to/cifar10-fd-pilots
 ```
 
-启动器固定使用物理 GPU 0/1/2/3，在当前终端等待所有进程结束，不创建 tmux
-session。已有 `final.pt` 会跳过，只有 `resume.pt` 时自动续训。训练日志写到输出目录
-的 `logs/`，逐 epoch 的未加权 CE、logit MSE 和 feature MSE 写入
-`loss_components.csv`。
+启动器使用物理 GPU 4/5/6：GPU 4 顺序执行第一组和纯 MEP 对照，GPU 5/6 各执行
+一组。它在当前终端等待所有进程结束，不创建 tmux session。已有 `final.pt` 会跳过，
+只有 `resume.pt` 时自动续训。训练日志写到输出目录的 `logs/`，逐 epoch 的未加权
+CE、logit MSE 和 feature MSE 写入 `loss_components.csv`。
 
 ## 测试
 
