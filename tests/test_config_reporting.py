@@ -103,6 +103,23 @@ def test_eps32_pilot_grid() -> None:
         assert train["monitor_pgd_step_size"] == 8
 
 
+def test_eps32_nonfinite_diagnostic_grid() -> None:
+    names = (
+        "diagnostic_mep_eps32_alpha16_logit10_lr01.yaml",
+        "diagnostic_mep_eps32_alpha8_logit10_lr01.yaml",
+        "diagnostic_mep_ce_eps32_alpha8_lr01.yaml",
+        "diagnostic_mep_eps32_alpha8_logit10_lr001.yaml",
+    )
+    for name in names:
+        config = load_config(ROOT / "configs" / "train" / name)
+        train = config["train"]
+        assert config["deterministic"] is True
+        assert train["backend"] == "mep"
+        assert train["epochs"] == 1
+        assert train["epsilon"] == 32
+        assert train["abort_on_nonfinite"] is True
+
+
 def test_paper_comparison_has_zero_delta_for_exact_values(tmp_path: Path) -> None:
     metrics = {name: value / 100.0 for name, value in PAPER_TABLE2[("ours_fd", 12)].items()}
     result = tmp_path / "evaluation.json"

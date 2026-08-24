@@ -198,6 +198,17 @@ python summarize_cifar10_eps32_pilots.py /path/to/cifar10-fd-pilots
 只有 `resume.pt` 时自动续训。训练日志写到输出目录的 `logs/`，逐 epoch 的未加权
 CE、logit MSE 和 feature MSE 写入 `loss_components.csv`。
 
+若 pilot 在首个 epoch 就产生 NaN，运行数值诊断。它在第一个非有限 batch 立即中止，
+并分别检查前向、输入梯度、反向梯度和优化器更新：
+
+```bash
+./run_cifar10_eps32_nonfinite_diagnostics.sh \
+  /path/to/cifar-data \
+  /path/to/eps32-nonfinite
+
+python summarize_cifar10_eps32_nonfinite.py /path/to/eps32-nonfinite
+```
+
 ## 测试
 
 ```bash

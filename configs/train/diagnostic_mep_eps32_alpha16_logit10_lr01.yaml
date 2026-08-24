@@ -1,0 +1,14 @@
+name: diagnostic_mep_eps32_alpha16_logit10_lr01
+deterministic: true
+train:
+  objective: mep_baseline
+  backend: mep
+  epochs: 1
+  epsilon: 32
+  alpha: 16
+  lr: 0.1
+  mep_logit_weight: 10
+  feature_weight: 0
+  monitor_pgd_steps: 10
+  monitor_pgd_step_size: 8
+  abort_on_nonfinite: true

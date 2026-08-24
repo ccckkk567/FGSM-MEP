@@ -49,6 +49,80 @@ TRAIN_FIELDS = [
 LOSS_FIELDS = ["epoch", "train_ce_loss", "train_logit_mse", "train_feature_mse"]
 
 
+def _all_finite(values: list[torch.Tensor] | tuple[torch.Tensor, ...]) -> bool:
+    checks = [torch.isfinite(value).all() for value in values]
+    return not checks or bool(torch.stack(checks).all().item())
+
+
+def _tensor_diagnostics(value: torch.Tensor) -> dict[str, Any]:
+    detached = value.detach()
+    finite = torch.isfinite(detached)
+    finite_values = detached[finite]
+    result: dict[str, Any] = {
+        "shape": list(detached.shape),
+        "finite_fraction": finite.float().mean().item() if detached.numel() else 1.0,
+    }
+    if finite_values.numel():
+        result.update(
+            {
+                "finite_min": finite_values.min().item(),
+                "finite_max": finite_values.max().item(),
+                "finite_abs_max": finite_values.abs().max().item(),
+            }
+        )
+    return result
+
+
+def _named_tensor_diagnostics(
+    values: list[tuple[str, torch.Tensor]],
+) -> dict[str, Any]:
+    nonfinite: dict[str, Any] = {}
+    largest: list[tuple[float, str]] = []
+    for name, value in values:
+        stats = _tensor_diagnostics(value)
+        if float(stats["finite_fraction"]) < 1.0:
+            nonfinite[name] = stats
+        largest.append((float(stats.get("finite_abs_max", -1.0)), name))
+    largest.sort(reverse=True)
+    return {
+        "nonfinite": nonfinite,
+        "largest_finite_abs": [
+            {"name": name, "value": maximum} for maximum, name in largest[:5]
+        ],
+    }
+
+
+def _abort_nonfinite(
+    run_dir: Path,
+    *,
+    stage: str,
+    epoch: int,
+    batch: int,
+    tensors: dict[str, torch.Tensor],
+    model: torch.nn.Module | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "stage": stage,
+        "epoch": epoch,
+        "batch": batch,
+        "tensors": {name: _tensor_diagnostics(value) for name, value in tensors.items()},
+    }
+    if model is not None:
+        gradients = [
+            (name, parameter.grad)
+            for name, parameter in model.named_parameters()
+            if parameter.grad is not None
+        ]
+        payload["gradients"] = _named_tensor_diagnostics(gradients)
+        payload["parameters"] = _named_tensor_diagnostics(list(model.named_parameters()))
+        payload["buffers"] = _named_tensor_diagnostics(list(model.named_buffers()))
+    path = run_dir / "nonfinite_diagnostic.json"
+    write_json(path, payload)
+    raise FloatingPointError(
+        f"Non-finite value at epoch={epoch}, batch={batch}, stage={stage}; details: {path}"
+    )
+
+
 def _forward_features(
     model: torch.nn.Module,
     inputs: torch.Tensor,
@@ -320,7 +394,7 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
         epoch_scores: torch.Tensor | None = None
 
         progress = tqdm(loaders.train, desc=f"train {epoch + 1}/{epochs}", leave=False)
-        for images, targets, sample_ids in progress:
+        for batch_number, (images, targets, sample_ids) in enumerate(progress):
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             clean_features_for_selection = None
@@ -345,6 +419,22 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             input_gradient = torch.autograd.grad(
                 initial_loss, initial_delta, retain_graph=needs_initial_graph
             )[0].detach()
+            if bool(train_cfg["abort_on_nonfinite"]) and not _all_finite(
+                (logits_initial, initial_loss, input_gradient)
+            ):
+                _abort_nonfinite(
+                    run_dir,
+                    stage="initial_forward_or_input_gradient",
+                    epoch=epoch,
+                    batch=batch_number,
+                    tensors={
+                        "logits_initial": logits_initial,
+                        "initial_loss": initial_loss,
+                        "input_gradient": input_gradient,
+                        "initial_delta": initial_delta,
+                    },
+                    model=model,
+                )
             perturbation = build_training_perturbation(
                 initial=initial_delta,
                 inputs=images,
@@ -405,18 +495,78 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             else:
                 raise AssertionError(f"Unhandled objective: {objective}")
 
+            if bool(train_cfg["abort_on_nonfinite"]) and not _all_finite(
+                (logits_adv, adversarial_ce, logit_mse, feature_mse, loss)
+            ):
+                _abort_nonfinite(
+                    run_dir,
+                    stage="adversarial_forward_or_loss",
+                    epoch=epoch,
+                    batch=batch_number,
+                    tensors={
+                        "logits_initial": logits_initial,
+                        "logits_adv": logits_adv,
+                        "adversarial_ce": adversarial_ce,
+                        "logit_mse": logit_mse,
+                        "feature_mse": feature_mse,
+                        "loss": loss,
+                        "input_gradient": input_gradient,
+                        "adversarial_delta": perturbation.adversarial,
+                    },
+                    model=model,
+                )
+
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
+            if bool(train_cfg["abort_on_nonfinite"]):
+                gradients = [
+                    parameter.grad
+                    for parameter in model.parameters()
+                    if parameter.grad is not None
+                ]
+                if not _all_finite(gradients):
+                    _abort_nonfinite(
+                        run_dir,
+                        stage="backward",
+                        epoch=epoch,
+                        batch=batch_number,
+                        tensors={
+                            "adversarial_ce": adversarial_ce,
+                            "logit_mse": logit_mse,
+                            "feature_mse": feature_mse,
+                            "loss": loss,
+                        },
+                        model=model,
+                    )
             optimizer.step()
+            if bool(train_cfg["abort_on_nonfinite"]):
+                state_values = list(model.parameters()) + list(model.buffers())
+                if not _all_finite(state_values):
+                    _abort_nonfinite(
+                        run_dir,
+                        stage="optimizer_step",
+                        epoch=epoch,
+                        batch=batch_number,
+                        tensors={
+                            "adversarial_ce": adversarial_ce,
+                            "logit_mse": logit_mse,
+                            "feature_mse": feature_mse,
+                            "loss": loss,
+                        },
+                        model=model,
+                    )
             scheduler.step()
             if mep_state is not None:
                 assert perturbation.next_prior is not None and perturbation.next_momentum is not None
                 mep_state.update(sample_ids, perturbation.next_prior, perturbation.next_momentum)
 
-            total_loss += loss.item() * targets.numel()
-            total_ce_loss += adversarial_ce.item() * targets.numel()
-            total_logit_mse += logit_mse.item() * targets.numel()
-            total_feature_mse += feature_mse.item() * targets.numel()
+            loss_value, ce_value, logit_value, feature_value = torch.stack(
+                (loss, adversarial_ce, logit_mse, feature_mse)
+            ).detach().tolist()
+            total_loss += loss_value * targets.numel()
+            total_ce_loss += ce_value * targets.numel()
+            total_logit_mse += logit_value * targets.numel()
+            total_feature_mse += feature_value * targets.numel()
             total_correct += logits_adv.argmax(1).eq(targets).sum().item()
             total_seen += targets.numel()
             progress.set_postfix(loss=f"{total_loss / total_seen:.4f}")

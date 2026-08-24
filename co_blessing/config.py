@@ -46,6 +46,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "monitor_pgd_step_size": 2.0,
         "monitor_subset": None,
         "track_features": False,
+        "abort_on_nonfinite": False,
     },
     "eval": {
         "epsilon": 16.0,

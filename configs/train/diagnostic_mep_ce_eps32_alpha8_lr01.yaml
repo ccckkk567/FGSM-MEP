@@ -1,0 +1,14 @@
+name: diagnostic_mep_ce_eps32_alpha8_lr01
+deterministic: true
+train:
+  objective: ours_co
+  backend: mep
+  epochs: 1
+  epsilon: 32
+  alpha: 8
+  lr: 0.1
+  mep_logit_weight: 0
+  feature_weight: 0
+  monitor_pgd_steps: 10
+  monitor_pgd_step_size: 8
+  abort_on_nonfinite: true
