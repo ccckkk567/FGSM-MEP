@@ -142,6 +142,23 @@ def test_eps32_alpha8_pilot_grid() -> None:
         assert train["abort_on_nonfinite"] is True
 
 
+def test_eps32_alpha8_high_fd_grid() -> None:
+    for feature_weight in (50, 100, 200, 400):
+        name = f"pilot_fd_eps32_alpha8_fw{feature_weight}.yaml"
+        config = load_config(ROOT / "configs" / "train" / name)
+        train = config["train"]
+        assert config["deterministic"] is True
+        assert train["objective"] == "ours_fd"
+        assert train["backend"] == "mep"
+        assert train["epochs"] == 40
+        assert train["epsilon"] == 32
+        assert train["alpha"] == 8
+        assert train["lr"] == 0.1
+        assert train["mep_logit_weight"] == 10
+        assert train["feature_weight"] == feature_weight
+        assert train["abort_on_nonfinite"] is True
+
+
 def test_paper_comparison_has_zero_delta_for_exact_values(tmp_path: Path) -> None:
     metrics = {name: value / 100.0 for name, value in PAPER_TABLE2[("ours_fd", 12)].items()}
     result = tmp_path / "evaluation.json"
