@@ -209,6 +209,63 @@ CE、logit MSE 和 feature MSE 写入 `loss_components.csv`。
 python summarize_cifar10_eps32_nonfinite.py /path/to/eps32-nonfinite
 ```
 
+### ε=32、α=8：从 40 epochs 续训到完整 110 epochs
+
+只确认三组：纯 MEP（FD=0）、Ours-FD（FD=50）、Ours-FD（FD=200）。默认分别使用
+物理 GPU **1、5、6**，每个子进程内部都是 `cuda:0`；不创建 tmux session，不自动评估 AA。
+保留 `lr=0.1`、MEP 在 epoch 40/80 的重置，以及绝对里程碑 100/105 的学习率衰减。
+40-epoch pilot 没有经历这些后续阶段；本轮是完整周期确认，不是继续增加权重搜索。
+
+在 HPC 上更新代码、激活 `co-blessing` 后，直接在现有终端执行：
+
+```bash
+cd /data/cjk/FGSM-MEP
+conda activate co-blessing
+pytest -q
+
+bash run_cifar10_eps32_alpha8_full110.sh \
+  /data/cjk/cifar-data \
+  /data/cjk/FGSM-MEP-cifar10-eps32-alpha8-full110
+```
+
+默认从以下两个根目录读取已完成的 pilot（只读，不覆盖）：
+
+- `/data/cjk/FGSM-MEP-cifar10-eps32-alpha8-pilots`：`pilot_mep_eps32_alpha8_logit10`。
+- `/data/cjk/FGSM-MEP-cifar10-eps32-alpha8-highfd`：`pilot_fd_eps32_alpha8_fw50`、`pilot_fd_eps32_alpha8_fw200`。
+
+如源目录不同，可把这两个根目录依次作为脚本的第三、第四个参数。三份运行记录和
+MEP checkpoint 的复制约需 4 GB；考虑原子保存时的临时副本，建议预留至少 10 GB。
+准备阶段有 CPU 校验/复制时间。
+也可以先执行 `python continue_cifar10_eps32_alpha8_full110.py --prepare-only`，只准备、不占 GPU。
+
+准备器会核对 source `resume.pt/final.pt` 的 epoch=39、两份 CSV 的连续性、最佳模型、
+优化器/调度器/MEP/RNG 状态及训练配置；复制完整运行到 `full_*` 子目录。旧 final 文件
+移入副本中的 `source_pilot/`，旧配置/环境也在这里留档；源目录完全不变。新的
+`continuation_config.yaml` 继承保存的配置，只变更名称、路径、设备和 `epochs=110`。
+`continuation.json` 记录来源、目标及原 checkpoint/config 的 SHA256。
+
+续训使用 `resume.pt`，保留复制来的 `best.pt`、0–39 的 CSV 和损失记录，日志追加到
+新根目录的 `logs/full_*.log`。如果后续没有更好的 PGD-10，`best.pt` 仍可能是原 pilot
+的 epoch 4/5，内部原始名称/40-epoch 配置也会保留；不要因此误认为续训没有发生。
+
+重复执行同一命令会检查并恢复已保存的 epoch，只有完整 epoch 109 的最终 checkpoint
+和 110 行连续日志通过核对才跳过。若中断发生在 CSV/checkpoint 分别写入的间隙，导致
+epoch 不一致，或出现非有限诊断，准备器会拒绝续训并指出路径；不会擅自截断日志、
+覆盖 checkpoint 或从零重新训练。不要同时手动向同一个 `full_*` 目录启动训练。
+
+完成后汇总：
+
+```bash
+python summarize_cifar10_eps32_alpha8_full110.py \
+  /data/cjk/FGSM-MEP-cifar10-eps32-alpha8-full110 \
+  | tee /data/cjk/FGSM-MEP-cifar10-eps32-alpha8-full110/summary.md
+```
+
+本轮仍是 **εE=32/255、步长 8/255、无噪声 PGD-10 测试集监控**，不是完整 AA，也不是
+原 Table 2 固定 εE=16/255、攻击后加噪的评估。`alpha=8` 是已调小步长的扩展配置，
+不是原论文所有参数不变的复现。当前 checkpoint/权重选择用了测试集，结果只用于
+探索；正式投稿需分开独立验证集选优与最终测试评估。
+
 ## 测试
 
 ```bash
