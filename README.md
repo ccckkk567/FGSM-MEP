@@ -438,3 +438,32 @@ python summarize_aaer_ours_fd_stability_screen.py \
 
 只有同一 `(epsilon, alpha, lambdaFD, lr)` 的三个 seed 均为 `ALL_FINITE`，才进入下一轮
 110-epoch、保留 `resume.pt` 的最终训练。正式训练仍只报告 final checkpoint。
+
+### 筛选后的 AAER-PreAct 最终训练与评估
+
+40-epoch 筛选冻结的候选为：`epsilon=8/12/16/32/48/64` 对应
+`(alpha, lambdaFD, lr)=(8,1,.03),(12,5,.01),(16,10,.01),(8,25,.01),
+(12,5,.01),(16,10,.01)`。其中 epsilon=64 没有得到同时具有非随机 clean
+精度且末期 PGD 稳定的候选；这里保留的是最终 PGD-10 最高的有限已学习配置，必须在论文
+中标为高半径退化/CO-like regime，不能称为高 epsilon 的成功防御。
+
+训练目录与筛选目录严格分开，配置和选择理由会写入 `selected_manifest.json`。训练只使用原
+Ours-FD 110 epoch 日程和 `final.pt`，不按 PGD monitor 选择 best checkpoint：
+
+```bash
+python run_aaer_ours_fd_selected_full.py \
+  --data-root /data/cjk/cifar-data \
+  --output-root /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-selected \
+  --screen-root /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-stability-screen \
+  --gpus 0 1 2 3 4 5 6 7
+```
+
+完成且仅在 18 个 `final.pt` 都存在时，才运行 AAER Table-2 的 matched-epsilon PGD-50
+（步长 epsilon/4、10 restarts）：
+
+```bash
+python run_aaer_ours_fd_selected_eval.py \
+  --data-root /data/cjk/cifar-data \
+  --output-root /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-selected \
+  --gpus 0 1 2 3 4 5 6 7
+```

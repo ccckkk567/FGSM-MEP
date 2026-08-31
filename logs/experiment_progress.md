@@ -543,6 +543,24 @@ epsilon=`8/12/16/32/48/64`，固定对应 alpha=`8/12/16/8/12/16`，扫描
 MEP 状态，设置 `save_resume=false`：被中断的项从 epoch 0 重跑，正式 110-epoch 运行保持
 可恢复 resume checkpoint。只有三个 seed 都 `ALL_FINITE` 的设置进入正式长程训练。
 
+### 11.8 AAER-PreAct 筛选完成与冻结候选
+
+筛选的 48 个 `(epsilon, lambdaFD, lr)` 组合、每组 3 个 seed（共 144 条 40-epoch 轨迹）
+均完成且无非有限值。因此原 `lambdaFD=200` 的跨-seed 数值失稳可通过降低 FD 权重避免，
+但这也意味着新结果必须标注为 **tuned Ours-FD**，而非不加说明地声称使用原始权重。
+
+筛选最终冻结：epsilon=8 `(alpha=8, lambdaFD=1, lr=.03)`；12 `(12,5,.01)`；16
+`(16,10,.01)`；32 `(8,25,.01)`；48 `(12,5,.01)`；64 `(16,10,.01)`。前三者与
+epsilon=32 的三 seed 在 epoch 10 后的 PGD-10 peak-to-final 落差均不超过 2.1 pt；
+epsilon=48 为 0.9–1.8 pt。epsilon=64 的所有“已学习”候选均在 40 epoch 内出现早期
+鲁棒性衰减；保留 `(16,10,.01)` 是因为它的最终 PGD-10 在非随机有限候选中最高，故是有限
+退化/CO-like 对照，而不是成功的高半径防御。
+
+`run_aaer_ours_fd_selected_full.py` 将上述 18 项训练到原 Ours-FD 的完整 110 epoch，
+保留 resume，并冻结只评估 `final.pt`。训练成功后
+`run_aaer_ours_fd_selected_eval.py` 才会对所有 18 个 final checkpoint 运行 AAER PGD-50-10
+并生成均值±标准差表；缺任一 final checkpoint 时评估器会拒绝执行。
+
 ## 12. 后续实验顺序
 
 1. 保留第 11.1–11.3 节的原始配置忠实性审计，作为“直接复用原论文配方在高 epsilon
