@@ -288,6 +288,29 @@ checkpoint 运行攻击评估。`FINITE_PREFIX` 不是成功结论，必须以�
 条件继续到 110 epochs；若之后鲁棒准确率崩塌，则记录为 CO/鲁棒学习失败。所有 α=8 或
 FD=50/200 的 ε=32 实验仅作为机制诊断，不进入正式 baseline 主表。
 
+### 高 epsilon 稳定/健康 CO 调参轨道
+
+若需要研究“不数值发散、但可观察正常 CO”的高 epsilon 训练，可使用独立的诊断网格。
+该网格**不会修改或替代**上节冻结 baseline 的 `N/A` 结论：它固定 Ours-FD 的 MEP、
+logit weight=10、节点 B 的 FD=200，只扫描 `alpha/epsilon ∈ {1/8,1/4,1/2}` 和
+`lr ∈ {0.01,0.03,0.1}`。共 27 个 deterministic、seed-0、1-epoch 前缀，物理 GPU
+5/6/7 自动并行；每个发现 NaN 的候选都会保存诊断并继续下一个候选。
+
+```bash
+python run_cifar10_high_eps_stability_grid.py \
+  --data-root /data/cjk/cifar-data \
+  --output-root /data/cjk/FGSM-MEP-cifar10-high-eps-stability-grid \
+  --gpus 5 6 7
+
+python summarize_cifar10_high_eps_stability_grid.py \
+  /data/cjk/FGSM-MEP-cifar10-high-eps-stability-grid \
+  | tee /data/cjk/FGSM-MEP-cifar10-high-eps-stability-grid/summary.md
+```
+
+`FINITE_PREFIX` 只代表该超参对在一个 epoch 内数值有限。选择有限候选后，应固定候选
+配置并运行完整 CO 轨迹，再分别报告 clean、强 PGD 和特征统计；不得把本筛选的结果
+直接写入正式 Ours-FD baseline 主表。
+
 ## 测试
 
 ```bash
