@@ -1,0 +1,5 @@
+extends: ../aaer/eval_cifar10_base.yaml
+name: aaer_eval_cifar10_eps32
+eval:
+  epsilon: 32
+  step_size: 8

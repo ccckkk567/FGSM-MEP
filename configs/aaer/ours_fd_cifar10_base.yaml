@@ -1,0 +1,41 @@
+# Method-faithful Ours-FD training for an AAER Table-2 comparison.
+# Derived runs change only seed and the documented high-epsilon stabilization
+# parameters (alpha/lr); all use the original 110-epoch MEP schedule.
+name: aaer_template_do_not_run
+deterministic: false
+data:
+  dataset: cifar10
+  batch_size: 128
+  num_workers: 2
+  augmentation: aaer
+model:
+  name: preactresnet18
+  num_classes: 10
+  # Matches related_code/2023_NeurIPS_AAER/CIFAR10/utils.py.  The wrapper
+  # normalizes inside the model so MEP priors and epsilon remain in pixels.
+  input_normalization: cifar10
+train:
+  objective: ours_fd
+  backend: mep
+  epochs: 110
+  epsilon: 8
+  alpha: null
+  lr: 0.1
+  milestones: [100, 105]
+  lr_gamma: 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  label_true_probability: 0.6
+  mep_reset_epochs: 40
+  mep_momentum_decay: 0.3
+  mep_logit_weight: 10.0
+  fd_include_mep_logit: true
+  feature_node: B
+  feature_weight: 200.0
+  # Retained only as a training-curve diagnostic.  The formal result always
+  # uses final.pt and is never selected on this monitor.
+  monitor_pgd_steps: 10
+  monitor_pgd_step_size: 2.0
+  monitor_subset: null
+  track_features: false
+  abort_on_nonfinite: true

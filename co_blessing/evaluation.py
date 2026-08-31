@@ -9,8 +9,8 @@ from tqdm import tqdm
 
 from .attacks import cw_linf, fgsm, parse_attack, pgd
 from .autoattack_adapter import generate_autoattack, source_metadata
-from .data import build_cifar10_loaders
-from .models import ResNet18
+from .data import build_cifar100_loaders, build_cifar10_loaders
+from .models import build_model
 from .utils import environment_metadata, load_model_state, resolve_device, seed_everything, write_json
 
 
@@ -18,10 +18,15 @@ def load_checkpoint_model(
     checkpoint_path: str | Path,
     device: torch.device,
     num_classes: int = 10,
+    *,
+    model_name: str = "resnet18",
+    input_normalization: str = "none",
 ) -> tuple[torch.nn.Module, dict[str, Any]]:
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     state = checkpoint.get("model", checkpoint)
-    model = ResNet18(num_classes).to(device)
+    model = build_model(
+        model_name, num_classes, input_normalization=input_normalization
+    ).to(device)
     load_model_state(model, state)
     model.eval()
     return model, checkpoint
@@ -174,9 +179,19 @@ def evaluate(config: dict[str, Any], checkpoint_path: str | Path) -> Path:
     seed = int(config["seed"])
     seed_everything(seed, bool(config["deterministic"]))
     device = resolve_device(str(config["device"]))
-    loaders = build_cifar10_loaders(config["data"], seed)
+    dataset = str(config["data"]["dataset"]).lower()
+    if dataset == "cifar10":
+        loaders = build_cifar10_loaders(config["data"], seed)
+    elif dataset == "cifar100":
+        loaders = build_cifar100_loaders(config["data"], seed)
+    else:
+        raise ValueError(f"Unsupported dataset: {dataset}")
     model, checkpoint = load_checkpoint_model(
-        checkpoint_path, device, int(config["model"]["num_classes"])
+        checkpoint_path,
+        device,
+        int(config["model"]["num_classes"]),
+        model_name=str(config["model"]["name"]),
+        input_normalization=str(config["model"].get("input_normalization", "none")),
     )
     images, targets = _collect_test(loaders.test)
     eval_cfg = config["eval"]
@@ -230,8 +245,9 @@ def evaluate(config: dict[str, Any], checkpoint_path: str | Path) -> Path:
         )
 
     payload = {
-        "protocol": "paper_non_adaptive_attack_then_noise",
+        "protocol": str(eval_cfg["protocol"]),
         "checkpoint": str(Path(checkpoint_path).resolve()),
+        "checkpoint_role": Path(checkpoint_path).stem,
         "checkpoint_epoch": checkpoint.get("epoch") if isinstance(checkpoint, dict) else None,
         "training_config": checkpoint.get("config") if isinstance(checkpoint, dict) else None,
         "evaluation_config": eval_cfg,

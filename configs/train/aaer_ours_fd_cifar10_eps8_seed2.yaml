@@ -1,0 +1,7 @@
+extends: ../aaer/ours_fd_cifar10_base.yaml
+name: aaer_ours_fd_cifar10_eps8_seed2
+seed: 2
+train:
+  epsilon: 8
+  alpha: null
+  lr: 0.1

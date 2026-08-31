@@ -1,0 +1,7 @@
+extends: ../aaer/ours_fd_cifar10_base.yaml
+name: aaer_ours_fd_cifar10_eps32_seed0
+seed: 0
+train:
+  epsilon: 32
+  alpha: 8
+  lr: 0.1

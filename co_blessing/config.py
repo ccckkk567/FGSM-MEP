@@ -18,6 +18,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "download": True,
         "batch_size": 128,
         "num_workers": 0,
+        "augmentation": "fgsm_mep",
         "train_subset": None,
         "test_subset": None,
     },
@@ -49,6 +50,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "abort_on_nonfinite": False,
     },
     "eval": {
+        "protocol": "paper_non_adaptive_attack_then_noise",
         "epsilon": 16.0,
         "step_size": 2.0,
         "attacks": ["clean", "fgsm", "pgd10", "pgd20", "pgd50", "cw20", "apgd-t", "aa"],
@@ -72,6 +74,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
 VALID_OBJECTIVES = {"mep_baseline", "ours_co", "ours_fd", "induce_co"}
 VALID_BACKENDS = {"mep", "rs"}
 VALID_NODES = {"A", "B", "C", "D", "E"}
+VALID_DATASETS = {"cifar10": 10, "cifar100": 100}
+VALID_MODELS = {"resnet18", "preactresnet18"}
+VALID_INPUT_NORMALIZATIONS = {"none", "cifar10", "cifar100"}
+VALID_AUGMENTATIONS = {"fgsm_mep", "aaer"}
 
 
 def _deep_update(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -83,11 +89,26 @@ def _deep_update(base: dict[str, Any], override: dict[str, Any]) -> dict[str, An
     return base
 
 
-def load_config(path: str | Path) -> dict[str, Any]:
-    config_path = Path(path).resolve()
+def _load_raw_config(config_path: Path, stack: tuple[Path, ...] = ()) -> dict[str, Any]:
+    if config_path in stack:
+        chain = " -> ".join(str(item) for item in (*stack, config_path))
+        raise ValueError(f"Cyclic config inheritance: {chain}")
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"Config must contain a mapping: {config_path}")
+    parent = raw.pop("extends", None)
+    if parent is None:
+        return raw
+    parent_path = (config_path.parent / str(parent)).resolve()
+    if not parent_path.is_file():
+        raise FileNotFoundError(f"Base config does not exist: {parent_path}")
+    inherited = _load_raw_config(parent_path, (*stack, config_path))
+    return _deep_update(inherited, raw)
+
+
+def load_config(path: str | Path) -> dict[str, Any]:
+    config_path = Path(path).resolve()
+    raw = _load_raw_config(config_path)
     config = _deep_update(copy.deepcopy(DEFAULT_CONFIG), raw)
     config["_config_path"] = str(config_path)
     validate_config(config)
@@ -96,12 +117,20 @@ def load_config(path: str | Path) -> dict[str, Any]:
 
 def validate_config(config: dict[str, Any]) -> None:
     train = config["train"]
-    if str(config["data"].get("dataset", "")).lower() != "cifar10":
-        raise ValueError("The first reproduction stage supports only CIFAR-10")
-    if str(config["model"].get("name", "")).lower() != "resnet18":
-        raise ValueError("The first reproduction stage supports only ResNet18")
-    if int(config["model"].get("num_classes", 0)) != 10:
-        raise ValueError("CIFAR-10 ResNet18 must use 10 classes")
+    dataset = str(config["data"].get("dataset", "")).lower()
+    if dataset not in VALID_DATASETS:
+        raise ValueError(f"Unsupported dataset: {dataset}")
+    model_name = str(config["model"].get("name", "")).lower().replace("-", "").replace("_", "")
+    if model_name not in VALID_MODELS:
+        raise ValueError(f"Unsupported model: {config['model'].get('name')}")
+    input_normalization = str(config["model"].get("input_normalization", "none")).lower()
+    if input_normalization not in VALID_INPUT_NORMALIZATIONS:
+        raise ValueError(f"Unsupported input normalization: {input_normalization}")
+    if input_normalization != "none" and input_normalization != dataset:
+        raise ValueError("Input normalization must match the configured CIFAR dataset")
+    expected_classes = VALID_DATASETS[dataset]
+    if int(config["model"].get("num_classes", 0)) != expected_classes:
+        raise ValueError(f"{dataset} requires num_classes={expected_classes}")
     if train["objective"] not in VALID_OBJECTIVES:
         raise ValueError(f"Unsupported training objective: {train['objective']}")
     if train["backend"] not in VALID_BACKENDS:
@@ -114,6 +143,8 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("Training alpha must be positive")
     if int(config["data"]["batch_size"]) <= 0:
         raise ValueError("Batch size must be positive")
+    if str(config["data"].get("augmentation", "fgsm_mep")).lower() not in VALID_AUGMENTATIONS:
+        raise ValueError(f"Unsupported augmentation: {config['data'].get('augmentation')}")
     if int(train["epochs"]) <= 0:
         raise ValueError("Epoch count must be positive")
     if int(train["mep_reset_epochs"]) <= 0:
@@ -138,6 +169,21 @@ def validate_config(config: dict[str, Any]) -> None:
                 raise ValueError(f"Invalid evaluation attack: {attack}")
     if evaluation["noise"]["kind"] not in {"uniform", "gaussian"}:
         raise ValueError("Inference noise kind must be uniform or gaussian")
+    protocol = str(evaluation.get("protocol", ""))
+    if not protocol:
+        raise ValueError("Evaluation protocol must be a non-empty string")
+    if protocol == "aaer_official_pgd50_10":
+        if evaluation["attacks"] != ["clean", "pgd50"]:
+            raise ValueError("AAER Table-2 evaluation requires exactly [clean, pgd50]")
+        if int(evaluation["restarts"]) != 10:
+            raise ValueError("AAER Table-2 evaluation requires 10 PGD restarts")
+        if bool(evaluation["noise"]["enabled"]):
+            raise ValueError("AAER Table-2 evaluation must not add inference noise")
+        if not bool(evaluation["freeze_misclassified"]):
+            raise ValueError("AAER official PGD must freeze already-misclassified samples")
+        expected_step = float(evaluation["epsilon"]) / 4.0
+        if abs(float(evaluation["step_size"]) - expected_step) > 1e-12:
+            raise ValueError("AAER Table-2 PGD step_size must equal epsilon / 4")
     analysis = config.get("analysis")
     if analysis is not None and analysis.get("node", "A") not in VALID_NODES:
         raise ValueError(f"Unsupported analysis node: {analysis.get('node')}")

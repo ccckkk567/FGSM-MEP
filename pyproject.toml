@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "co-blessing"
 version = "0.1.0"
-description = "Reproduction code for arXiv:2402.18211v1 on CIFAR-10 and ResNet18"
+description = "Ours-FD/FGSM-MEP reproduction and AAER-compatible CIFAR baselines"
 readme = "README.md"
 requires-python = ">=3.10,<3.12"
 dependencies = [

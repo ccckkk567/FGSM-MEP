@@ -112,6 +112,7 @@ def environment_metadata() -> dict[str, Any]:
         "reference_revisions": {
             "FGSM-PGI": git_revision_at(REPO_ROOT / "related_code" / "FGSM-PGI"),
             "ConvergeSmooth": git_revision_at(REPO_ROOT / "related_code" / "ConvergeSmooth"),
+            "AAER": git_revision_at(REPO_ROOT / "related_code" / "2023_NeurIPS_AAER"),
         },
     }
 

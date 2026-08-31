@@ -6,7 +6,7 @@ import yaml
 
 from .config import apply_overrides, load_config
 from .evaluation import evaluate
-from .reporting import compare_results, summarize_results
+from .reporting import compare_results, summarize_aaer_table2, summarize_results
 from .training import train
 
 
@@ -66,12 +66,18 @@ def reproduce(
             train(config, resume=str(resume_path) if resume_path.exists() else None)
 
     report_mode = str(manifest.get("report_mode", "paper")).lower()
-    default_report_name = "paper_table2_report" if report_mode == "paper" else "sweep_report"
+    default_report_name = {
+        "paper": "paper_table2_report",
+        "summary": "sweep_report",
+        "aaer": "aaer_table2_report",
+    }.get(report_mode, "report")
     report_dir = Path(configured_output) / str(manifest.get("report_name", default_report_name))
     if report_mode == "paper":
         compare_results(results, report_dir)
     elif report_mode == "summary":
         summarize_results(results, report_dir)
+    elif report_mode == "aaer":
+        summarize_aaer_table2(results, report_dir)
     else:
-        raise ValueError("Manifest report_mode must be 'paper' or 'summary'")
+        raise ValueError("Manifest report_mode must be 'paper', 'summary', or 'aaer'")
     return report_dir

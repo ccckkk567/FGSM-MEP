@@ -358,11 +358,12 @@ PGD-10 仍在 epoch 4/5。FD 确实降低了特征漂移，但没有转化为鲁
 的最终 PGD-10 只比纯 MEP 高 0.45 个百分点，FD=200 更低。该组 `alpha=8` / FD=50/200
 实验仅用于解释失败机制，**不进入正式 baseline 主表，也未运行 AA**。
 
-## 11. 冻结的 CIFAR-10 正式 Ours-FD baseline（当前结果）
+## 11. CIFAR-10 Ours-FD：忠实性审计与 Table 2 baseline 扩展
 
-### 11.1 正式训练配置
+### 11.1 原论文配置的忠实性审计
 
-正式主表只改变训练半径 `epsilonT ∈ {8,12,16,32,48,64}/255`。其余设置冻结为：
+为定位原论文配置的适用边界，忠实性审计只改变训练半径
+`epsilonT ∈ {8,12,16,32,48,64}/255`。其余设置冻结为：
 
 - 单步训练攻击 `alpha=epsilonT`（checkpoint 中的 `alpha: None` 表示运行时自动采用
   `epsilonT`，并非 alpha=0）。
@@ -375,7 +376,7 @@ PGD-10 仍在 epoch 4/5。FD 确实降低了特征漂移，但没有转化为鲁
 `2/255`、完整攻击迭代，以及对攻击后输入一次 `U(-16/255,16/255)` 裁剪噪声的
 non-adaptive attack-then-noise 协议。
 
-### 11.2 有效模型的正式 Table 2 评估
+### 11.2 原论文配置下有效模型的 Table 2 评估
 
 | epsilonT | Checkpoint epoch | Clean | FGSM | PGD-10 | PGD-20 | PGD-50 | C&W-20 | APGD-T | AA |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -393,7 +394,7 @@ Checkpoint 来源：epsilon=8/16 使用
 `/data/cjk/FGSM-MEP-runs-v2/diagnostic_fd_plus_mep_eps12/best.pt`。三者的保存配置已
 逐项核对为第 11.1 节的冻结设置。
 
-### 11.3 原始配置的高 epsilon 失败审计
+### 11.3 原始配置的高 epsilon 失败审计（配置消融）
 
 对 epsilon=32/48/64，使用同一冻结设置的 1-epoch 前缀（唯一诊断差异为
 `epochs=1` 和 `abort_on_nonfinite=true`）进行审计。该 guard 不改变优化计算，只在
@@ -405,10 +406,10 @@ Checkpoint 来源：epsilon=8/16 使用
 | 48/255 | `N/A (numerical divergence)` | epoch 0, batch 8, backward | 不运行攻击评估 |
 | 64/255 | `N/A (numerical divergence)` | epoch 0, batch 7, initial-forward/input-gradient | 不运行攻击评估 |
 
-因此，32/48/64 不是具有 10% 准确率的有效鲁棒模型，也不应把任何 NaN 后 checkpoint
-纳入主表。结论的适用范围是：在本实现、CIFAR-10/ResNet18、上述冻结协议及 seed 0
-下，原始 Ours-FD baseline 无法扩展至 `epsilonT >= 32/255`；这不是关于该方法理论能力
-的一般性证明。
+因此，32/48/64 不是上述冻结配置下的有效鲁棒模型，也不应把任何 NaN 后 checkpoint
+纳入结果。结论的适用范围是：在本实现、CIFAR-10/ResNet18、上述冻结协议及 seed 0 下，
+原始 `alpha=epsilonT, lr=0.1` 配方无法扩展至 `epsilonT >= 32/255`；这不是关于方法理论
+能力的一般性证明，也不阻止为下游 Table 2 baseline 选择稳定的高 epsilon 配方。
 
 ### 11.4 当前结论与投稿口径
 
@@ -474,18 +475,66 @@ matched-epsilon PGD-10 峰值，并在 40 epoch 内呈现有限的 peak-to-final
 保存的 epoch-39 状态精确继续至 epoch 109。三者始终属于调参诊断，不能取代第 11.3 节
 原始 baseline 的 `N/A (numerical divergence)`。
 
+epsilon=48/64 的两个候选已从各自 epoch-39 的 MEP/RNG/optimizer/scheduler 状态精确
+续跑至 epoch 109，续跑期间均无 `nonfinite_diagnostic.json`：
+
+| epsilonT | alpha | lr | Best epoch | Best Clean | Best PGD-10 | Final Clean | Final PGD-10 | Final Vact-B | 轨迹解释 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 32/255 | 8/255 | 0.10 | 4 | 24.31 | 13.12 | 63.29 | 7.97 | 1.17642 | 清晰、有限的 CO；来自第 10.4 节既有完整诊断 |
+| 48/255 | 12/255 | 0.03 | 28 | 25.86 | 9.62 | 47.33 | 7.34 | 0.88555 | 温和 CO：clean 上升，matched-PGD 峰值后有限下降 |
+| 64/255 | 16/255 | 0.03 | 99 | 23.88 | 10.46 | 27.80 | 10.19 | 0.51268 | 数值稳定、低性能；末期接近自身峰值，未显示明显 CO |
+
+所有准确率均为百分比。该轨道可以在 `epsilonT=32/48/64` 得到有限训练轨迹，并提供
+epsilon=32/48 的 CO 例子和 epsilon=64 的稳定低性能例子；它**没有**证明这些半径恢复了
+与 epsilon=8/12/16 相当的鲁棒性。原始 `alpha=epsilonT, lr=0.1` 的失败仍作为配置消融
+保留；下游 Table 2 baseline 则使用下节选出的稳定配方，并明确报告其 alpha/lr。
+
+### 11.6 目标表格更正：AAER 论文的 Table 2（新套件已实现，尚待运行）
+
+下游 baseline 的目标是 arXiv:2404.08154v2（AAER）的 Table 2，而非本记录此前采用的
+arXiv:2402.18211 Table 2 协议。AAER Table 2 的 CIFAR-10 行使用 PreActResNet-18，报告
+最终模型的 natural accuracy 和同半径 PGD-50-10 accuracy（50 steps、步长 `epsilon/4`、
+10 restarts），并以 3 个随机 seed 的均值±标准差呈现。原表列为 8/12/16/32；本项目将其
+扩展到 48/64。
+
+因此，现有 8/12/16/32/48/64 结果不能直接填入该表：当前实现是 post-activation CIFAR
+ResNet18，训练/选择使用 110-epoch step schedule 与 best checkpoint，评估则是另一论文的
+固定 epsilon=16、attack-then-noise、AutoAttack 协议。它们保留为 Ours-FD 的复现和高
+epsilon 机制诊断。AAER-compatible baseline 已作为独立套件实现，必须从头以
+PreActResNet-18 训练六个半径、保存最终 epoch，并使用匹配半径 PGD-50-10；所有 18 个
+（6 radii × 3 seeds）结果完成后再生成扩展 Table 2。
+
+实现位置与冻结协议：
+
+- 训练配置：`configs/train/aaer_ours_fd_cifar10_eps{8,12,16,32,48,64}_seed{0,1,2}.yaml`。
+- 模型：新增 CIFAR `PreActResNet18`；节点 B 仍定义为 `layer1` 输出，保持 Ours-FD 的
+  特征约束位置。BasicBlock 的投影分支、CIFAR-10 mean/std 与官方
+  `related_code/2023_NeurIPS_AAER/CIFAR10/{preact_resnet.py,utils.py}` 对齐；归一化通过
+  模型包装器实现，使 MEP 历史扰动和 epsilon 仍保留为 `[0,1]` 像素空间量。
+- 训练：原 Ours-FD/MEP 的 110 epochs、0/40/80 reset、100/105 milestones、FD(B)=200、
+  10×logit MSE；主结果强制使用 `final.pt`，不使用 PGD-best checkpoint。
+- 高 epsilon：复用有限轨迹筛选所得、但须在 PreActResNet18 上重新验证的候选：32 使用
+  `alpha=8/255, lr=0.1`，48 使用 `12/255, 0.03`，64 使用 `16/255, 0.03`。8/12/16 仍为
+  `alpha=epsilon, lr=0.1`。这是逐行披露的稳定化扩展，不是声称高 epsilon 完全未调参。
+- 评估：无随机推理噪声；同半径 PGD-50、步长 `epsilon/4`、10 restarts。为与 AAER 官方
+  `utils.py` 一致，PGD 仅更新当前正确分类的样本；汇总器会拒绝非 `final.pt`、旧
+  attack-then-noise、错误 PGD 设置或半径不匹配的 JSON。
+- 调度：`run_aaer_ours_fd_cifar10_train.sh` 与
+  `run_aaer_ours_fd_cifar10_eval.sh` 支持任意逗号分隔 GPU 列表，并对完成/中断运行分别跳过/恢复。
+
 ## 12. 后续实验顺序
 
-1. 冻结当前 CIFAR-10 正式表：不以 alpha=8 或变更 FD 权重的结果替代原始 baseline。
-2. 根据课题组建议，独立“健康 CO/稳定性”轨道的 1-epoch 网格和 6 条 40-epoch 轨迹
-   均已完成（第 11.5 节）。ε=32 的 `(alpha,lr)=(8/255,0.1)` 已有完整周期诊断；只将
-   ε=48 `(12/255,0.03)` 与 ε=64 `(16/255,0.03)` 从保存的 epoch-39 状态精确续跑至
-   epoch 109。续跑前先执行复制、配方、CSV、checkpoint、MEP/RNG 状态的准备检查；它们
-   仍不能替代正式表的高 epsilon `N/A`，也不能仅凭 test monitor 选模型。
-3. 为 PAMI 版本，对 epsilon=8/12/16 使用 validation-based checkpoint selection 和
-   seeds 0/1/2 重跑；高 epsilon 至少对数值失稳审计复现额外 seeds。
-4. 在 CIFAR-10 协议冻结后，扩展同一 baseline 至 CIFAR-100；当前代码需要先支持
-   CIFAR-100 数据加载、100 类输出与独立训练/失败审计配置。
+1. 保留第 11.1–11.3 节的原始配置忠实性审计，作为“直接复用原论文配方在高 epsilon
+   发散”的配置消融；它不是下游论文 Table 2 baseline 的唯一可选配方。
+2. 运行并验证已实现的 AAER-compatible Ours-FD 套件：PreActResNet-18、最终 checkpoint、
+   matching-epsilon PGD-50（步长 epsilon/4、10 restarts）、3 seeds；从头跑
+   epsilon=8/12/16/32/48/64。高 epsilon 的稳定 alpha/lr 仍须与低 epsilon 一样在新模型/
+   新协议下重新确认。
+3. 当前高 epsilon 结果保留为选择候选 alpha/lr 和解释 CO/数值失稳的诊断，不用其
+   checkpoint 生成 AAER Table 2 数值。
+4. 在 CIFAR-10 协议冻结后，扩展同一 baseline 至 CIFAR-100；代码现已支持 CIFAR-100
+   数据加载和 100 类 PreActResNet-18 输出，但尚未建立/运行独立的训练、失败审计与三 seed
+   配置矩阵。
 5. 保留 matched-epsilon 无噪声 AA、alpha=8 机制诊断和 CO/特征曲线作为补充材料。
 
 ## 13. 运行路径与代码版本

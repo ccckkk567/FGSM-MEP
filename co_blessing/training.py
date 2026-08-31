@@ -15,10 +15,10 @@ from tqdm import tqdm
 
 from .attacks import pgd
 from .config import validate_config
-from .data import build_cifar10_loaders
+from .data import build_cifar100_loaders, build_cifar10_loaders
 from .losses import channel_difference_scores, feature_difference, smooth_cross_entropy
 from .mep import MEPState, build_training_perturbation, random_start
-from .models import ResNet18
+from .models import ResNet18, build_model
 from .models.resnet import NODE_CHANNELS
 from .utils import (
     append_csv,
@@ -303,8 +303,24 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
     seed = int(config["seed"])
     seed_everything(seed, bool(config["deterministic"]))
     device = resolve_device(str(config["device"]))
-    loaders = build_cifar10_loaders(config["data"], seed)
-    model = ResNet18(int(config["model"]["num_classes"])).to(device)
+    dataset = str(config["data"]["dataset"]).lower()
+    # Retain the direct CIFAR-10/ResNet18 paths so the original reproduction
+    # and its lightweight monkeypatched tests remain byte-for-byte compatible.
+    if dataset == "cifar10":
+        loaders = build_cifar10_loaders(config["data"], seed)
+    elif dataset == "cifar100":
+        loaders = build_cifar100_loaders(config["data"], seed)
+    else:  # validate_config already rejects this; keep the error local as well.
+        raise ValueError(f"Unsupported dataset: {dataset}")
+    input_normalization = str(config["model"].get("input_normalization", "none"))
+    if str(config["model"]["name"]).lower() == "resnet18" and input_normalization == "none":
+        model = ResNet18(int(config["model"]["num_classes"])).to(device)
+    else:
+        model = build_model(
+            str(config["model"]["name"]),
+            int(config["model"]["num_classes"]),
+            input_normalization=input_normalization,
+        ).to(device)
 
     train_cfg = config["train"]
     epsilon = float(train_cfg["epsilon"]) / 255.0

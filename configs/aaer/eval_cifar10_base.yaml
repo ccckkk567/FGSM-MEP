@@ -1,0 +1,28 @@
+name: aaer_eval_template_do_not_run
+deterministic: false
+data:
+  dataset: cifar10
+  batch_size: 128
+  num_workers: 2
+  augmentation: aaer
+model:
+  name: preactresnet18
+  num_classes: 10
+  input_normalization: cifar10
+eval:
+  protocol: aaer_official_pgd50_10
+  epsilon: 8
+  step_size: 2
+  attacks: [clean, pgd50]
+  restarts: 10
+  # The released AAER evaluator updates only samples currently classified
+  # correctly; preserving this is required for an exact Table-2 comparison.
+  freeze_misclassified: true
+  fgsm_random_start: false
+  noise:
+    enabled: false
+    kind: uniform
+    magnitude: 0
+    seed: 0
+    clip_to_input_range: true
+  batch_size: 128

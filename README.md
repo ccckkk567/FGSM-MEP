@@ -283,15 +283,17 @@ python summarize_cifar10_native_high_eps_audit.py \
   | tee /data/cjk/FGSM-MEP-cifar10-native-high-eps-audit/summary.md
 ```
 
-`NUMERICAL_DIVERGENCE` 记录为正式 baseline 的 `N/A (numerical divergence)`，不对该
-checkpoint 运行攻击评估。`FINITE_PREFIX` 不是成功结论，必须以不改变任何训练超参的
-条件继续到 110 epochs；若之后鲁棒准确率崩塌，则记录为 CO/鲁棒学习失败。所有 α=8 或
-FD=50/200 的 ε=32 实验仅作为机制诊断，不进入正式 baseline 主表。
+`NUMERICAL_DIVERGENCE` 记录为**原论文冻结配置审计**的
+`N/A (numerical divergence)`，不对该 checkpoint 运行攻击评估。`FINITE_PREFIX` 不是
+成功结论，必须以不改变任何训练超参的条件继续到 110 epochs；若之后鲁棒准确率崩塌，则
+记录为 CO/鲁棒学习失败。它说明原始 `alpha=epsilon, lr=0.1` 配方的高 epsilon 边界；
+下游论文的 Table 2 baseline 可另行选择完整训练且数值有限的稳定配方，但必须逐行披露
+对应的 alpha 与 lr。
 
 ### 高 epsilon 稳定/健康 CO 调参轨道
 
 若需要研究“不数值发散、但可观察正常 CO”的高 epsilon 训练，可使用独立的诊断网格。
-该网格**不会修改或替代**上节冻结 baseline 的 `N/A` 结论：它固定 Ours-FD 的 MEP、
+该网格**不会修改或替代**上节冻结配置审计的 `N/A` 结论：它固定 Ours-FD 的 MEP、
 logit weight=10、节点 B 的 FD=200，只扫描 `alpha/epsilon ∈ {1/8,1/4,1/2}` 和
 `lr ∈ {0.01,0.03,0.1}`。共 27 个 deterministic、seed-0、1-epoch 前缀，物理 GPU
 5/6/7 自动并行；每个发现 NaN 的候选都会保存诊断并继续下一个候选。
@@ -309,7 +311,8 @@ python summarize_cifar10_high_eps_stability_grid.py \
 
 `FINITE_PREFIX` 只代表该超参对在一个 epoch 内数值有限。选择有限候选后，应固定候选
 配置并运行完整 CO 轨迹，再分别报告 clean、强 PGD 和特征统计；不得把本筛选的结果
-直接写入正式 Ours-FD baseline 主表。
+直接写入结果表；完成完整训练和统一攻击评估后，选定的稳定配方可作为下游论文 Table 2
+baseline，但须在表注中报告其 alpha/lr。
 
 ### 高 epsilon 的 40-epoch CO 轨迹筛选
 
@@ -365,3 +368,48 @@ pytest
 ```
 
 测试不下载 CIFAR-10；集成测试使用合成小数据验证训练、checkpoint 和恢复流程。
+
+## AAER Table 2 兼容的 Ours-FD baseline
+
+`configs/manifests/aaer_ours_fd_cifar10.yaml` 是新的、独立的投稿 baseline 矩阵。它不复用
+本 README 前文的旧 checkpoint：模型为 **PreActResNet-18**，每个半径运行 Ours-FD 的原始
+110-epoch MEP 日程（reset 0/40/80，学习率里程碑 100/105），结果只使用 `final.pt`。
+
+训练和评估半径为 `8/12/16/32/48/64 / 255`，每个半径使用 seeds `0/1/2`。低半径保留原始
+`alpha=epsilon, lr=0.1`；为避免已审计的高半径数值发散，32/48/64 分别固定为
+`(alpha, lr)=(8/255,0.1),(12/255,0.03),(16/255,0.03)`。这三个稳定化选择会写入每份
+`config.yaml`，应在论文表注中披露。
+
+AAER 评估不加本论文的 attack-then-noise：每个最终模型只报告 Clean 与同半径
+PGD-50-10（步长 `epsilon/4`、10 random restarts）。新实现逐项对齐
+`related_code/2023_NeurIPS_AAER/CIFAR10/`：网络输入采用其 CIFAR-10 标准化常数，
+而 MEP 扰动仍以像素空间保存；PGD 按其 `utils.py` 仅更新当前仍被正确分类的样本。
+汇总器仅接受这一协议和 `final.pt`，并输出三 seed 的 mean ± sample std。
+
+在 HPC 激活 `co-blessing` 后，以下命令以四张物理 GPU 为例运行所有 18 个训练。脚本不新建
+tmux，按 GPU 队列调度；已有 `final.pt` 会跳过，只有 `resume.pt` 时自动恢复。
+
+```bash
+cd /data/cjk/FGSM-MEP
+conda activate co-blessing
+pytest -q
+
+bash run_aaer_ours_fd_cifar10_train.sh \
+  /data/cjk/cifar-data \
+  /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10 \
+  0,1,2,3
+```
+
+完成训练后再运行完整 PGD-50-10；不要与训练并发，以免评估占用训练 GPU：
+
+```bash
+bash run_aaer_ours_fd_cifar10_eval.sh \
+  /data/cjk/cifar-data \
+  /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10 \
+  0,1,2,3
+```
+
+最终表格写入
+`/data/cjk/FGSM-MEP-aaer-ours-fd-cifar10/aaer_ours_fd_cifar10_table2/aaer_table2_summary.md`。
+18 个 MEP `resume.pt` 按每份约 1.3 GiB 计就需约 24 GiB；考虑 final/best、原子保存和日志，
+建议至少预留 60 GiB。

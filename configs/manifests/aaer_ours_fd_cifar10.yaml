@@ -1,0 +1,22 @@
+output_root: runs/aaer_ours_fd_cifar10
+report_mode: aaer
+report_name: aaer_ours_fd_cifar10_table2
+experiments:
+  - {config: configs/train/aaer_ours_fd_cifar10_eps8_seed0.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps8.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps8_seed1.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps8.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps8_seed2.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps8.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps12_seed0.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps12.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps12_seed1.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps12.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps12_seed2.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps12.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps16_seed0.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps16.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps16_seed1.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps16.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps16_seed2.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps16.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps32_seed0.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps32.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps32_seed1.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps32.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps32_seed2.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps32.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps48_seed0.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps48.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps48_seed1.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps48.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps48_seed2.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps48.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps64_seed0.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps64.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps64_seed1.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps64.yaml}
+  - {config: configs/train/aaer_ours_fd_cifar10_eps64_seed2.yaml, checkpoint: final.pt, eval_config: configs/eval/aaer_cifar10_eps64.yaml}

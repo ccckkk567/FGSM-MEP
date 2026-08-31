@@ -7,7 +7,7 @@ import yaml
 
 from co_blessing.config import load_config
 from co_blessing.paper_values import PAPER_TABLE2
-from co_blessing.reporting import compare_results, summarize_results
+from co_blessing.reporting import compare_results, summarize_aaer_table2, summarize_results
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +81,33 @@ def test_cifar10_fd_sweep_manifests_are_complete_and_disjoint() -> None:
     assert epsilon_set(full) == {8, 12, 16, 32, 48, 64}
     assert epsilon_set(gpu0).isdisjoint(epsilon_set(gpu1))
     assert epsilon_set(gpu0) | epsilon_set(gpu1) == epsilon_set(full)
+
+
+def test_aaer_ours_fd_manifest_is_final_checkpoint_preact_three_seed_matrix() -> None:
+    manifest = yaml.safe_load(
+        (ROOT / "configs" / "manifests" / "aaer_ours_fd_cifar10.yaml").read_text(encoding="utf-8")
+    )
+    assert manifest["report_mode"] == "aaer"
+    assert len(manifest["experiments"]) == 18
+    observed: set[tuple[int, int]] = set()
+    for item in manifest["experiments"]:
+        assert item["checkpoint"] == "final.pt"
+        config = load_config(ROOT / item["config"])
+        evaluation = load_config(ROOT / item["eval_config"])
+        assert config["data"]["dataset"] == "cifar10"
+        assert config["model"]["name"] == "preactresnet18"
+        assert config["model"]["input_normalization"] == "cifar10"
+        assert config["train"]["epochs"] == 110
+        assert config["train"]["mep_reset_epochs"] == 40
+        assert config["train"]["milestones"] == [100, 105]
+        assert config["train"]["fd_include_mep_logit"] is True
+        assert evaluation["eval"]["protocol"] == "aaer_official_pgd50_10"
+        assert evaluation["eval"]["attacks"] == ["clean", "pgd50"]
+        assert evaluation["eval"]["restarts"] == 10
+        assert evaluation["eval"]["freeze_misclassified"] is True
+        assert evaluation["eval"]["step_size"] == evaluation["eval"]["epsilon"] / 4
+        observed.add((int(config["train"]["epsilon"]), int(config["seed"])))
+    assert observed == {(epsilon, seed) for epsilon in (8, 12, 16, 32, 48, 64) for seed in range(3)}
 
 
 def test_eps32_pilot_grid() -> None:
@@ -223,3 +250,38 @@ def test_sweep_summary_accepts_epsilon_without_paper_target(tmp_path: Path) -> N
     assert "ours_fd | 0 | 64/255 | 64/255 | 42 | 75.00 | 25.00" in markdown_path.read_text(
         encoding="utf-8"
     )
+
+
+def test_aaer_summary_requires_final_no_noise_matched_epsilon_and_aggregates(tmp_path: Path) -> None:
+    results = []
+    for seed, clean, pgd50 in ((0, 0.5, 0.2), (1, 0.6, 0.3), (2, 0.7, 0.4)):
+        path = tmp_path / f"seed{seed}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "protocol": "aaer_official_pgd50_10",
+                    "checkpoint_role": "final",
+                    "training_config": {
+                        "data": {"dataset": "cifar10"},
+                        "model": {"name": "preactresnet18"},
+                        "seed": seed,
+                        "train": {"objective": "ours_fd", "epsilon": 8},
+                    },
+                    "evaluation_config": {
+                        "epsilon": 8,
+                        "step_size": 2,
+                        "attacks": ["clean", "pgd50"],
+                        "restarts": 10,
+                        "freeze_misclassified": True,
+                        "noise": {"enabled": False},
+                    },
+                    "metrics": {"clean": clean, "pgd50": pgd50},
+                }
+            ),
+            encoding="utf-8",
+        )
+        results.append(path)
+    csv_path, markdown_path = summarize_aaer_table2(results, tmp_path / "aaer")
+    csv = csv_path.read_text(encoding="utf-8")
+    assert "cifar10,preactresnet18,ours_fd,8,clean,3,\"0,1,2\",60.0,10.0,complete" in csv
+    assert "60.00 ± 10.00" in markdown_path.read_text(encoding="utf-8")

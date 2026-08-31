@@ -5,7 +5,7 @@ import argparse
 from .analysis import analyze_features, analyze_induce, analyze_masks, analyze_vact_curves
 from .config import apply_overrides, load_config
 from .evaluation import evaluate
-from .reporting import compare_results
+from .reporting import compare_results, summarize_aaer_table2
 from .reproduce import reproduce
 from .training import train
 
@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser = subparsers.add_parser("evaluate", help="Run the paper evaluation protocol")
     eval_parser.add_argument("--config", required=True)
     eval_parser.add_argument("--checkpoint", required=True)
+    eval_parser.add_argument("--name", help="Override the evaluation output directory name")
     _common_overrides(eval_parser)
 
     analyze_parser = subparsers.add_parser("analyze", help="Reproduce mechanism analyses")
@@ -41,6 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser = subparsers.add_parser("compare", help="Compare evaluation JSON files to Table 2")
     compare_parser.add_argument("--results", nargs="+", required=True)
     compare_parser.add_argument("--output", required=True)
+
+    aaer_parser = subparsers.add_parser(
+        "aaer-summary", help="Aggregate final-checkpoint runs into an AAER-style Table 2"
+    )
+    aaer_parser.add_argument("--results", nargs="+", required=True)
+    aaer_parser.add_argument("--output", required=True)
 
     reproduce_parser = subparsers.add_parser("reproduce", help="Run a sequential reproduction manifest")
     reproduce_parser.add_argument("--manifest", required=True)
@@ -63,7 +70,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "train":
         print(train(_configured(args), resume=args.resume))
     elif args.command == "evaluate":
-        print(evaluate(_configured(args), args.checkpoint))
+        config = _configured(args)
+        if args.name:
+            config["name"] = args.name
+        print(evaluate(config, args.checkpoint))
     elif args.command == "analyze":
         if args.task == "induce":
             if not args.runs:
@@ -81,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(analyze_masks(config, args.checkpoint, args.output))
     elif args.command == "compare":
         print(compare_results(args.results, args.output))
+    elif args.command == "aaer-summary":
+        print(summarize_aaer_table2(args.results, args.output))
     elif args.command == "reproduce":
         print(
             reproduce(
