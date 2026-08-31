@@ -311,6 +311,30 @@ python summarize_cifar10_high_eps_stability_grid.py \
 配置并运行完整 CO 轨迹，再分别报告 clean、强 PGD 和特征统计；不得把本筛选的结果
 直接写入正式 Ours-FD baseline 主表。
 
+### 高 epsilon 的 40-epoch CO 轨迹筛选
+
+一 epoch 筛选完成后，不以其 clean 或 PGD-10 数值选 checkpoint。每个半径保留一个
+学习导向的较小步长和一个较大但仍有限的步长：`(ε, α, lr)` 为
+`(32,4,0.1)`、`(32,8,0.1)`、`(48,6,0.1)`、`(48,12,0.03)`、
+`(64,8,0.1)`、`(64,16,0.03)`（均为 `/255`，lr 无单位）。它们均从头运行 40 epochs，
+记录每 epoch 的 matched-epsilon PGD-10 与 A–E 特征差异。这个阶段用于区分正常学习、
+可解释的 CO 和数值发散；它仍不是正式 baseline 或最终 checkpoint 选择。
+
+```bash
+python run_cifar10_high_eps_trajectory_screen.py \
+  --data-root /data/cjk/cifar-data \
+  --output-root /data/cjk/FGSM-MEP-cifar10-high-eps-trajectory-screen \
+  --gpus 5 6 7
+
+python summarize_cifar10_high_eps_trajectory_screen.py \
+  /data/cjk/FGSM-MEP-cifar10-high-eps-trajectory-screen \
+  | tee /data/cjk/FGSM-MEP-cifar10-high-eps-trajectory-screen/summary.md
+```
+
+汇总器中的 `Best→final PGD drop` 是 CO 曲线的诊断量，不是通过阈值。尤其不能把 40 epoch
+期间的 test PGD-10 峰值直接作为投稿表格模型；有效候选之后应重新训练完整周期，并使用
+独立 validation 选择 checkpoint。
+
 ## 测试
 
 ```bash
