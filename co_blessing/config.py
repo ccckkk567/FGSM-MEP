@@ -43,6 +43,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "feature_weight": 200.0,
         "induce_percent": 10.0,
         "resume_every": 1,
+        "save_resume": True,
         "monitor_pgd_steps": 10,
         "monitor_pgd_step_size": 2.0,
         "monitor_subset": None,
@@ -147,6 +148,8 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError(f"Unsupported augmentation: {config['data'].get('augmentation')}")
     if int(train["epochs"]) <= 0:
         raise ValueError("Epoch count must be positive")
+    if not isinstance(train.get("save_resume", True), bool):
+        raise ValueError("save_resume must be boolean")
     if int(train["mep_reset_epochs"]) <= 0:
         raise ValueError("MEP reset period must be positive")
     if float(train["monitor_pgd_step_size"]) <= 0:

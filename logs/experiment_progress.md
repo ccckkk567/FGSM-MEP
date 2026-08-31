@@ -522,6 +522,27 @@ PreActResNet-18 训练六个半径、保存最终 epoch，并使用匹配半径 
 - 调度：`run_aaer_ours_fd_cifar10_train.sh` 与
   `run_aaer_ours_fd_cifar10_eval.sh` 支持任意逗号分隔 GPU 列表，并对完成/中断运行分别跳过/恢复。
 
+### 11.7 AAER-PreAct 首轮正式配置的数值失稳与重筛选
+
+首次运行新套件时，`lambdaFD=200` 不能跨 seed 保持有限，故该 18-run 目录不得用于正式
+Table 2：
+
+| Run | 失败位置 | 直接证据 | 结论 |
+|---|---|---|---|
+| epsilon=32, seed=2, alpha=8, lr=0.1 | epoch 0, batch 100, backward | feature MSE `8.27e29`、总 loss `1.65e32`，随后梯度非有限 | FD 项爆炸 |
+| epsilon=12, seed=2, alpha=12, lr=0.1 | epoch 28, batch 326, optimizer step | feature MSE `7.08e18`、总 loss `1.42e21`，BN running variance 达 `1.66e31` | 延迟 FD/BN 爆炸 |
+
+两项的 adversarial CE 仍约 2.30、logit MSE 很小，因此根因是 PreActResNet18 + AAER
+标准化下，原 `lambdaFD=200` 的特征正则数值尺度不稳定，而非数据下载、CE 或 MEP logit
+正则。失败 checkpoint 不重启、不评估，也不记为有效鲁棒模型。
+
+下一轮改用 `run_aaer_ours_fd_stability_screen.py`，覆盖所有
+epsilon=`8/12/16/32/48/64`，固定对应 alpha=`8/12/16/8/12/16`，扫描
+`lambdaFD={1,5,10,25}`、`lr={0.01,0.03}` 与 seeds `0/1/2`。每组 40 epochs、启用非有限
+中止、PGD-10 只监控固定 1,000-example 子集；共 144 项。为避免屏幕实验保存约 190 GiB
+MEP 状态，设置 `save_resume=false`：被中断的项从 epoch 0 重跑，正式 110-epoch 运行保持
+可恢复 resume checkpoint。只有三个 seed 都 `ALL_FINITE` 的设置进入正式长程训练。
+
 ## 12. 后续实验顺序
 
 1. 保留第 11.1–11.3 节的原始配置忠实性审计，作为“直接复用原论文配方在高 epsilon

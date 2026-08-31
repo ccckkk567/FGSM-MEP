@@ -644,7 +644,9 @@ def train(config: dict[str, Any], resume: str | None = None) -> Path:
             atomic_torch_save(
                 _light_checkpoint(model, config, epoch, metrics, selected_channels), run_dir / "best.pt"
             )
-        if (epoch + 1) % int(train_cfg["resume_every"]) == 0 or epoch + 1 == epochs:
+        if bool(train_cfg.get("save_resume", True)) and (
+            (epoch + 1) % int(train_cfg["resume_every"]) == 0 or epoch + 1 == epochs
+        ):
             atomic_torch_save(
                 _resume_checkpoint(
                     model=model,

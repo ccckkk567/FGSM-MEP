@@ -413,3 +413,28 @@ bash run_aaer_ours_fd_cifar10_eval.sh \
 `/data/cjk/FGSM-MEP-aaer-ours-fd-cifar10/aaer_ours_fd_cifar10_table2/aaer_table2_summary.md`。
 18 个 MEP `resume.pt` 按每份约 1.3 GiB 计就需约 24 GiB；考虑 final/best、原子保存和日志，
 建议至少预留 60 GiB。
+
+### AAER-PreAct 全半径稳定性筛选
+
+若正式 `λFD=200` 在任一 seed 出现 feature-loss/BN 数值爆炸，先运行下面的独立筛选，
+不要复用失败运行目录。它覆盖全部 `ε=8/12/16/32/48/64`，固定
+`alpha=(8,12,16,8,12,16)/255`，扫描 `λFD={1,5,10,25}`、`lr={0.01,0.03}` 和 seeds
+`0/1/2`，共 144 条 40-epoch 轨迹。每 epoch 仅监控 1,000 测试样本的 matched-ε PGD-10；
+它用于筛除数值崩坏，**不是**最终模型选择或 Table 2 结果。
+
+筛选不保存 1.3 GiB 的 `resume.pt`，完成项仅保留 final/best checkpoint 与曲线；中断项会从
+epoch 0 重跑。因此 144 个筛选不需要约 190 GiB 的 MEP 状态空间。
+
+```bash
+python run_aaer_ours_fd_stability_screen.py \
+  --data-root /data/cjk/cifar-data \
+  --output-root /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-stability-screen \
+  --gpus 0 1 2 3 4 5 6 7
+
+python summarize_aaer_ours_fd_stability_screen.py \
+  /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-stability-screen \
+  | tee /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-stability-screen/summary.md
+```
+
+只有同一 `(epsilon, alpha, lambdaFD, lr)` 的三个 seed 均为 `ALL_FINITE`，才进入下一轮
+110-epoch、保留 `resume.pt` 的最终训练。正式训练仍只报告 final checkpoint。
