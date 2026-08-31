@@ -335,6 +335,29 @@ python summarize_cifar10_high_eps_trajectory_screen.py \
 期间的 test PGD-10 峰值直接作为投稿表格模型；有效候选之后应重新训练完整周期，并使用
 独立 validation 选择 checkpoint。
 
+### 选择的 48/64 轨迹精确续跑
+
+40-epoch 结果中，ε=48 的 `(alpha, lr)=(12/255, 0.03)` 与 ε=64 的
+`(16/255, 0.03)` 是较大但有限的候选；ε=32 的 `(8/255, 0.1)` 已有独立的完整周期
+诊断。下面的续跑器只处理前两者：先将完整的 40-epoch 运行复制到新目录，并精确恢复
+model、optimizer、scheduler、MEP state 及 RNG。除名称、输出目录、设备和总 epoch 数
+从 40 改为 110 外，训练配方不得改变；源目录不会被修改。
+
+先执行不占 GPU 的准备/完整性检查：
+
+```bash
+python continue_cifar10_high_eps_trajectory_full110.py \
+  --source-root /data/cjk/FGSM-MEP-cifar10-high-eps-trajectory-screen \
+  --output-root /data/cjk/FGSM-MEP-cifar10-high-eps-healthy-co-full110 \
+  --data-root /data/cjk/cifar-data \
+  --gpus 0 1 2 3 \
+  --prepare-only
+```
+
+检查确认两条运行均显示 `READY: resume at epoch 40` 后，去掉 `--prepare-only` 才会使用
+前两个 GPU 继续训练。续跑器会拒绝非连续 CSV、非有限数值、配方变更或过早的 final
+checkpoint；输出仍是调参诊断，不能代替原始 Ours-FD baseline。
+
 ## 测试
 
 ```bash
