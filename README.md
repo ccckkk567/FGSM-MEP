@@ -266,6 +266,28 @@ python summarize_cifar10_eps32_alpha8_full110.py \
 不是原论文所有参数不变的复现。当前 checkpoint/权重选择用了测试集，结果只用于
 探索；正式投稿需分开独立验证集选优与最终测试评估。
 
+### 原始 Ours-FD 的高 epsilon 失败审计
+
+正式半径扫描固定为 `εT={8,12,16,32,48,64}/255`，不额外加入 ε=24。对于尚未形成
+有效模型的 32/48/64，先运行 1-epoch 前缀审计：除了 `epochs=1` 与
+`abort_on_nonfinite=true` 外，配置严格保留 Ours-FD 的 `alpha=epsilon`、`lr=0.1`、
+MEP + 10×logit MSE、节点 B 的 FD=200。GPU 5/6/7 分别对应 ε=32/48/64：
+
+```bash
+bash run_cifar10_native_high_eps_audit.sh \
+  /data/cjk/cifar-data \
+  /data/cjk/FGSM-MEP-cifar10-native-high-eps-audit
+
+python summarize_cifar10_native_high_eps_audit.py \
+  /data/cjk/FGSM-MEP-cifar10-native-high-eps-audit \
+  | tee /data/cjk/FGSM-MEP-cifar10-native-high-eps-audit/summary.md
+```
+
+`NUMERICAL_DIVERGENCE` 记录为正式 baseline 的 `N/A (numerical divergence)`，不对该
+checkpoint 运行攻击评估。`FINITE_PREFIX` 不是成功结论，必须以不改变任何训练超参的
+条件继续到 110 epochs；若之后鲁棒准确率崩塌，则记录为 CO/鲁棒学习失败。所有 α=8 或
+FD=50/200 的 ε=32 实验仅作为机制诊断，不进入正式 baseline 主表。
+
 ## 测试
 
 ```bash

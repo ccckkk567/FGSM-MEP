@@ -1,0 +1,15 @@
+# One-epoch prefix of the frozen Ours-FD baseline.  The guard only records
+# numerical failure; it does not change the optimization algorithm.
+name: native_audit_ours_fd_eps32
+train:
+  objective: ours_fd
+  backend: mep
+  epochs: 1
+  epsilon: 32
+  alpha: 32
+  lr: 0.1
+  mep_logit_weight: 10
+  fd_include_mep_logit: true
+  feature_node: B
+  feature_weight: 200
+  abort_on_nonfinite: true

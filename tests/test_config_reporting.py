@@ -120,6 +120,30 @@ def test_eps32_nonfinite_diagnostic_grid() -> None:
         assert train["abort_on_nonfinite"] is True
 
 
+def test_native_high_epsilon_failure_audits_are_frozen_ours_fd_prefixes() -> None:
+    for epsilon in (32, 48, 64):
+        config = load_config(ROOT / "configs" / "train" / f"native_audit_ours_fd_eps{epsilon}.yaml")
+        baseline = load_config(ROOT / "configs" / "train" / f"ours_fd_eps{epsilon}.yaml")
+        train = config["train"]
+        baseline_train = baseline["train"].copy()
+        baseline_train.update({"epochs": 1, "alpha": epsilon, "abort_on_nonfinite": True})
+        assert config["seed"] == 0
+        assert config["data"] == baseline["data"]
+        assert config["model"] == baseline["model"]
+        assert train == baseline_train
+        assert train["objective"] == "ours_fd"
+        assert train["backend"] == "mep"
+        assert train["epochs"] == 1
+        assert train["epsilon"] == epsilon
+        assert train["alpha"] == epsilon
+        assert train["lr"] == 0.1
+        assert train["mep_logit_weight"] == 10
+        assert train["fd_include_mep_logit"] is True
+        assert train["feature_node"] == "B"
+        assert train["feature_weight"] == 200
+        assert train["abort_on_nonfinite"] is True
+
+
 def test_eps32_alpha8_pilot_grid() -> None:
     expected = {
         "pilot_mep_eps32_alpha8_logit10.yaml": ("mep_baseline", 0.0),

@@ -1,0 +1,14 @@
+# One-epoch prefix of the frozen Ours-FD baseline.  See the eps32 companion.
+name: native_audit_ours_fd_eps48
+train:
+  objective: ours_fd
+  backend: mep
+  epochs: 1
+  epsilon: 48
+  alpha: 48
+  lr: 0.1
+  mep_logit_weight: 10
+  fd_include_mep_logit: true
+  feature_node: B
+  feature_weight: 200
+  abort_on_nonfinite: true
