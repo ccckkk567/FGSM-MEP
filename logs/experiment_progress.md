@@ -561,17 +561,84 @@ epsilon=48 为 0.9–1.8 pt。epsilon=64 的所有“已学习”候选均在 40
 `run_aaer_ours_fd_selected_eval.py` 才会对所有 18 个 final checkpoint 运行 AAER PGD-50-10
 并生成均值±标准差表；缺任一 final checkpoint 时评估器会拒绝执行。
 
+### 11.9 完成：AAER-compatible CIFAR-10 tuned Ours-FD baseline
+
+18 个最终训练（6 个训练半径 × seeds 0/1/2）与全部正式评估均已完成。此节的数值是当前
+可用于 AAER Table-2 扩展对比的 CIFAR-10 baseline，输出目录为
+`/data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-selected`。它与第 11.1–11.3 节的 post-activation
+复现、best-checkpoint 或 attack-then-noise 结果完全分开，不能混用。
+
+**训练设置。** 模型是与 AAER 参考实现对齐的 CIFAR `PreActResNet18`，输入采用 AAER 的
+crop+flip 及 CIFAR-10 normalization（规范化在模型内完成，因而扰动仍以 `[0,1]` 像素空间
+的 `epsilon/255` 表示）。优化器为 SGD（batch=128、momentum=0.9、weight decay=`5e-4`），
+MEP 后端使用 reset epochs `0/40/80`、momentum decay `0.3`、10×logit MSE、label true
+probability `0.6`，训练保持原 Ours-FD 的 110 epochs 与 lr milestones `100/105`。训练目标为
+smooth CE + `lambdaFD * mean((f_adv(B)-f_init(B))^2)`；所有主结果均使用 epoch 109 的
+`final.pt`，不使用 screen/best checkpoint。
+
+原 `lambdaFD=200` 在 PreAct/AAER 设置下跨 seed 出现 feature/BN 数值爆炸（第 11.7 节），
+所以此处应称为 **tuned Ours-FD**。最终超参数是独立 40-epoch、三 seed 稳定性筛选所冻结的
+候选；screen 的 1,000-example PGD-10 仅用于开发期数值稳定性与轨迹筛选，不能替代下列完整
+测试集最终评估：
+
+| epsilon_T | alpha | lambdaFD(B) | lr | 110-epoch final status |
+|---:|---:|---:|---:|---|
+| 8/255 | 8/255 | 1 | 0.03 | finite |
+| 12/255 | 12/255 | 5 | 0.01 | finite |
+| 16/255 | 16/255 | 10 | 0.01 | finite |
+| 32/255 | 8/255 | 25 | 0.01 | finite |
+| 48/255 | 12/255 | 5 | 0.01 | finite |
+| 64/255 | 16/255 | 10 | 0.01 | finite, degraded/CO-like candidate |
+
+**评估设置。** 对每个 seed 在完整 CIFAR-10 测试集使用匹配半径
+`epsilon_E=epsilon_T` 的 PGD-50，步长 `epsilon_E/4`、10 random restarts；攻击仅更新当前
+正确分类样本，以匹配 `related_code/2023_NeurIPS_AAER/CIFAR10/utils.py`。无 attack-then-noise、
+无推理随机噪声、无 AutoAttack；汇总为 3-seed mean ± sample standard deviation。
+
+| Dataset | Model | Method / metric | 8/255 | 12/255 | 16/255 | 32/255 | 48/255 | 64/255 |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| CIFAR-10 | PreActResNet18 | tuned Ours-FD clean | 83.66 ± 0.06 | 84.95 ± 5.85 | 86.81 ± 1.15 | 66.75 ± 1.09 | 45.92 ± 1.21 | 54.24 ± 18.07 |
+| CIFAR-10 | PreActResNet18 | tuned Ours-FD PGD-50-10 | 52.31 ± 0.29 | 9.20 ± 2.62 | 3.35 ± 1.54 | 2.45 ± 0.63 | 3.34 ± 0.14 | 1.96 ± 3.18 |
+
+**Best-epoch 诊断（非正式结果）。** 每个 `best.pt` 是按该 seed 的 1,000-example
+matched-epsilon PGD-10 monitor 最大值保存，故下表的 PGD-10 不能与上表完整测试集
+PGD-50-10 直接比较，且不能替换 Table-2 的 final checkpoint；它仅用于定位 CO 前的
+鲁棒性峰值。
+
+| epsilon_T | seed-wise best epochs | clean at best epoch | monitor PGD-10 at best epoch |
+|---:|---|---:|---:|
+| 8/255 | 101, 101, 103 | 82.92 ± 0.17 | 54.67 ± 0.81 |
+| 12/255 | 58, 50, 47 | 63.80 ± 0.88 | 41.03 ± 0.06 |
+| 16/255 | 34, 38, 39 | 52.32 ± 0.42 | 31.57 ± 0.29 |
+| 32/255 | 38, 39, 8 | 40.98 ± 7.51 | 12.47 ± 0.38 |
+| 48/255 | 36, 31, 47 | 25.95 ± 2.15 | 12.50 ± 0.46 |
+| 64/255 | 91, 58, 93 | 43.77 ± 19.38 | 15.73 ± 4.02 |
+
+epsilon=8 的 peak 位于训练末期（epoch 101–103），与最终强鲁棒性一致。epsilon=12/16
+分别在 epoch 47–58 与 34–39 达到清晰、低方差的鲁棒性峰值，随后 clean 继续增大而最终
+PGD-50 崩塌，是后期 CO 的直接时间证据。epsilon=32/48 的峰值低且 epoch 跨 seed 分散；
+epsilon=64 的 best clean/PGD-10 标准差达 19.38/4.02 pt，表明该半径即使在峰值处也不稳定。
+
+**结论。** epsilon=8/255 是唯一保持有效且跨 seed 稳定鲁棒性的点。epsilon=12/255 与
+16/255 的 clean 仍分别为约 85% 和 87%，但 PGD-50 降至 9.20% 和 3.35%，是完整 110 epoch
+后的明确 CO，而非第 40 epoch screen 的数值发散。epsilon=32/255 及 48/255 为有限但鲁棒
+学习失败；epsilon=64/255 的 clean/PGD-50 标准差分别为 18.07/3.18 pt，表明高度不稳定。
+因此此 baseline 可以如实放入 Table 2，但不能声称 Ours-FD 在 epsilon>=12/255 的 AAER
+PreAct 协议下成功缓解 CO。
+
+首轮 18-job 训练曾因完成 run 保留大量约 1.3 GiB 的 MEP `resume.pt`，在并发 checkpoint
+写入时产生 `PytorchStreamWriter file write failed`。释放已有 `final.pt` run 的冗余 resume
+后，剩余 5 项恢复并完成；该事件是磁盘写入空间不足，不是训练数值非有限值。
+
 ## 12. 后续实验顺序
 
 1. 保留第 11.1–11.3 节的原始配置忠实性审计，作为“直接复用原论文配方在高 epsilon
    发散”的配置消融；它不是下游论文 Table 2 baseline 的唯一可选配方。
-2. 运行并验证已实现的 AAER-compatible Ours-FD 套件：PreActResNet-18、最终 checkpoint、
-   matching-epsilon PGD-50（步长 epsilon/4、10 restarts）、3 seeds；从头跑
-   epsilon=8/12/16/32/48/64。高 epsilon 的稳定 alpha/lr 仍须与低 epsilon 一样在新模型/
-   新协议下重新确认。
-3. 当前高 epsilon 结果保留为选择候选 alpha/lr 和解释 CO/数值失稳的诊断，不用其
-   checkpoint 生成 AAER Table 2 数值。
-4. 在 CIFAR-10 协议冻结后，扩展同一 baseline 至 CIFAR-100；代码现已支持 CIFAR-100
+2. AAER-compatible CIFAR-10 tuned Ours-FD 已完成，正式数值见第 11.9 节；保留其完整
+   训练曲线、`selected_manifest.json` 和 evaluation JSON，用于论文表格与补充材料的可追溯性。
+3. 当前高 epsilon 结果保留为解释 CO/数值失稳的诊断；在最终写作中将原
+   `lambdaFD=200` 的数值发散与第 11.9 节低 lambdaFD 的有限后期 CO 明确区分。
+4. 在 CIFAR-10 baseline 冻结后，扩展同一 baseline 至 CIFAR-100；代码现已支持 CIFAR-100
    数据加载和 100 类 PreActResNet-18 输出，但尚未建立/运行独立的训练、失败审计与三 seed
    配置矩阵。
 5. 保留 matched-epsilon 无噪声 AA、alpha=8 机制诊断和 CO/特征曲线作为补充材料。
@@ -592,6 +659,9 @@ HPC 路径：
 - 高 epsilon 40-epoch CO 轨迹筛选：`/data/cjk/FGSM-MEP-cifar10-high-eps-trajectory-screen`
 - 高 epsilon 48/64 精确续跑：`/data/cjk/FGSM-MEP-cifar10-high-eps-healthy-co-full110`
 - 冻结 CIFAR-10 Table 2 评估：`/data/cjk/FGSM-MEP-formal-baseline-table2`
+- AAER 40-epoch 稳定性筛选：`/data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-stability-screen`
+- AAER 最终 110-epoch 训练及 PGD-50-10 评估：
+  `/data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-selected`
 
 关键提交：
 
@@ -603,6 +673,9 @@ HPC 路径：
 - `c5156ba`：加入保留 logit weight=10 的 ε=32、α=8 第二轮 pilot。
 - `1fc1ab1`：加入 ε=32、α=8 的高 FD weight 50/100/200/400 pilot。
 - `5e697e2`：加入安全的 40→110 epoch continuation、三卡启动器、汇总器和测试。
+- `55b8866`：加入 AAER-compatible PreActResNet18、最终 checkpoint 与 PGD-50-10 协议。
+- `a43ba3f`：加入全 epsilon、三 seed 的 AAER 稳定性筛选。
+- `9fc0ab4`：加入冻结候选的 110-epoch 训练及最终评估调度器。
 
 当前 Python 目标环境：Python 3.10、PyTorch 2.0.1、torchvision 0.15.2、CUDA
 11.8。每个完整 MEP `resume.pt` 约 1.3 GiB，应为大规模多 seed 实验预留足够磁盘。

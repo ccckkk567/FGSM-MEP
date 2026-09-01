@@ -467,3 +467,14 @@ python run_aaer_ours_fd_selected_eval.py \
   --output-root /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-selected \
   --gpus 0 1 2 3 4 5 6 7
 ```
+
+若需 CO 机制诊断，可用同一完整测试集 PGD-50-10 协议额外评估训练 monitor 所选的
+`best.pt`；它输出到独立目录且绝不能替代 final Table-2 数字：
+
+```bash
+python run_aaer_ours_fd_selected_eval.py \
+  --checkpoint-role best \
+  --data-root /data/cjk/cifar-data \
+  --output-root /data/cjk/FGSM-MEP-aaer-ours-fd-cifar10-selected \
+  --gpus 0 1 2 3 4 5 6 7
+```

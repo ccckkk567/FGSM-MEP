@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -13,6 +15,13 @@ SPEC = importlib.util.spec_from_file_location(
 selected = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = selected
 SPEC.loader.exec_module(selected)
+
+EVAL_SPEC = importlib.util.spec_from_file_location(
+    "aaer_selected_eval", ROOT / "run_aaer_ours_fd_selected_eval.py"
+)
+selected_eval = importlib.util.module_from_spec(EVAL_SPEC)
+sys.modules[EVAL_SPEC.name] = selected_eval
+EVAL_SPEC.loader.exec_module(selected_eval)
 
 
 class AAERSelectedFullTests(unittest.TestCase):
@@ -40,6 +49,37 @@ class AAERSelectedFullTests(unittest.TestCase):
         self.assertEqual(config["train"]["mep_logit_weight"], 10.0)
         self.assertTrue(config["train"]["save_resume"])
         self.assertEqual(config["train"]["monitor_subset"], 1000)
+
+    def test_best_checkpoint_summary_is_explicitly_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = []
+            for seed in range(3):
+                path = root / f"seed{seed}.json"
+                path.write_text(
+                    json.dumps(
+                        {
+                            "protocol": "aaer_official_pgd50_10",
+                            "checkpoint_role": "best",
+                            "checkpoint_epoch": 10 + seed,
+                            "training_config": {"seed": seed, "train": {"epsilon": 8}},
+                            "evaluation_config": {
+                                "epsilon": 8,
+                                "step_size": 2,
+                                "attacks": ["clean", "pgd50"],
+                                "restarts": 10,
+                            },
+                            "metrics": {"clean": 0.8, "pgd50": 0.5},
+                        }
+                    )
+                )
+                paths.append(path)
+            _, markdown = selected_eval.summarize_best_diagnostic(
+                paths, root / "summary", expected_epsilons=(8,)
+            )
+            text = markdown.read_text(encoding="utf-8")
+            self.assertIn("not** Table-2", text)
+            self.assertIn("10,11,12", text)
 
 
 if __name__ == "__main__":
